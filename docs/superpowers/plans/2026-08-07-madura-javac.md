@@ -14,7 +14,7 @@
 
 - Kotlin source must not use the Kotlin stdlib or reflection — JDK core libraries only (`elide.pkl` sets `noStdlib = true`).
 - No new Rust dependencies. `getargs` is removed from `crates/madura`; `mimalloc` stays.
-- CLI is pure argv passthrough except for ONE injected leading argument, `-Djava.home=<dist root>` (consumed by the native image before `main`); exit codes propagate unmodified.
+- CLI is pure argv passthrough — no injected arguments, no environment variables; exit codes propagate unmodified. Dist-root/`java.home` resolution happens inside the Kotlin entry via `ProcessHandle` (binary-relative, per WHIPLASH Entry.kt's binpath pattern).
 - **Hermetic distribution:** layout `<root>/bin/<binary>` + `<root>/lib/{libmadura-javac.so,modules,ct.sym}`; dev tree mirrors it as `target/<profile>/madura` + `target/lib/…` (root = `target/`). No JDK at runtime; `$JAVA_HOME` required at build time only (source of `modules`/`ct.sym`).
 - Host target only: `x86_64-unknown-linux-gnu`. The musl/static target is out of scope.
 - The artifact `.dev/artifacts/native-image/madura-javac.so` has **no `DT_SONAME` and no `lib` prefix**. Every staged copy MUST be renamed to `libmadura-javac.so` — that is both the link-time name (`-l madura-javac`) and the runtime name the loader resolves via rpath. Never stage it under its original name.
@@ -392,14 +392,28 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 > shape `<root>/{bin,lib}`. No JDK is required at runtime; `$JAVA_HOME` is required
 > at **build** time to source `modules`/`ct.sym`.
 >
-> **AMENDED again (e2e finding, user-adjudicated):** `version_flag_prints_javac_version`
-> exposed that `ToolProvider...run(...)` ignores stdout — javac's `JavacTool.run` sends
-> the version banner and usage to stderr, unlike the real `javac` launcher. Fix (user
-> approved): `crates/madura_javac/src/JavacInvoker.kt` switches its body to
-> `System.exit(com.sun.tools.javac.Main.compile(args))` (import `com.sun.tools.javac.Main`;
-> the null-check is dropped — a missing `jdk.compiler` fails the image build instead).
-> This is a Task 4 fix-round change to Task 2's file, plus an image rebuild. The fix
-> round also commits the `Cargo.lock` refresh from the dependency swap.
+> **AMENDED again (e2e finding + user direction):** three coupled changes land in
+> Task 4's fix round:
+> 1. **Stream parity:** `ToolProvider...run(...)` ignores stdout (version banner and
+>    usage go to stderr, unlike real `javac`). The Kotlin entry switches to
+>    `com.sun.tools.javac.Main.compile(args)`.
+> 2. **Binary-relative `java.home` (user-mandated mechanism):** the user's hardened
+>    image config sets `-H:-ParseRuntimeOptions`, so `-Djava.home` argv injection
+>    does not work — and environment-variable mechanisms are explicitly forbidden.
+>    Instead the Kotlin entry resolves the binary's own absolute path in-process
+>    (`ProcessHandle.current().info().command()`, `toRealPath()` for symlinks — the
+>    WHIPLASH Entry.kt `resolveBinpath` pattern), derives `<root>` = `bin/..`,
+>    validates `<root>/lib/modules`, and sets `java.home`. Rust `main.rs` becomes
+>    pure passthrough with no root logic at all.
+> 3. **Exact reachability metadata (user request):** the user's config enables
+>    `--exact-reachability-metadata`; javac's precise resource/service/reflection
+>    needs are traced with the native-image agent against the app jar on a plain
+>    JVM, curated into `crates/madura_javac/native-image/` (repo-tracked), wired via
+>    `-H:ConfigurationFileDirectories`, and closed by iterating on
+>    `Missing*Registration` errors until e2e is green.
+>
+> The fix round also commits the `Cargo.lock` refresh from the dependency swap.
+> The fix-round step sequence is at the end of this task (steps F1–F8).
 
 **Files:**
 - Test: `crates/madura/tests/e2e.rs` (create — written first)
@@ -598,8 +612,6 @@ fn main() {
 Replace the contents of `crates/madura/src/main.rs` with:
 
 ```rust
-use std::ffi::OsString;
-use std::path::PathBuf;
 use std::process;
 
 use mimalloc::MiMalloc;
@@ -607,39 +619,10 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-// The dist is hermetic: <root>/bin/madura (or target/<profile>/madura in the
-// dev tree) finds platform metadata at <root>/lib/{modules,ct.sym}. javac
-// reads them via -Djava.home=<root>, which the native image parses from argv
-// before main.
-fn dist_root() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe()
-        .and_then(|p| p.canonicalize())
-        .map_err(|e| format!("cannot resolve own executable path: {e}"))?;
-    let root = exe
-        .parent()
-        .and_then(|bin| bin.parent())
-        .ok_or_else(|| format!("executable has no dist root: {}", exe.display()))?;
-    if !root.join("lib/modules").is_file() {
-        return Err(format!(
-            "missing platform image: {} (madura must live in a <root>/bin or target/<profile> layout with <root>/lib/modules)",
-            root.join("lib/modules").display(),
-        ));
-    }
-    Ok(root.to_path_buf())
-}
-
+// Pure passthrough: all dist-root/java.home resolution happens inside the
+// image's Kotlin entry (binary-relative via ProcessHandle).
 fn main() {
-    let root = match dist_root() {
-        Ok(root) => root,
-        Err(msg) => {
-            eprintln!("madura: {msg}");
-            process::exit(1);
-        }
-    };
-    let mut java_home = OsString::from("-Djava.home=");
-    java_home.push(root.as_os_str());
-    let args = std::iter::once(java_home).chain(std::env::args_os().skip(1));
-    match madura_javac::invoke(args) {
+    match madura_javac::invoke(std::env::args_os().skip(1)) {
         Ok(code) => process::exit(code),
         Err(err) => {
             eprintln!("madura: {err}");
@@ -676,6 +659,72 @@ if it tries to, run plain `cargo build -p madura` first.)
 git add crates/madura/Cargo.toml crates/madura/build.rs \
         crates/madura/src/main.rs crates/madura/tests/e2e.rs
 git commit -m "feat(madura): javac-compatible bin over madura-javac.so with e2e tests
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+#### Fix round F1–F8 (stream parity + binary-relative java.home + exact metadata)
+
+Executed after the initial Task 4 commit (`9bf4c5a`). The user's `elide.pkl` working
+tree state (exact-reachability, hardening flags, heap bounds, kotlin freeCompilerArgs)
+is the AUTHORITATIVE baseline — build on top of it; never remove or change the user's
+flags. The only permitted pkl addition is the `-H:ConfigurationFileDirectories` line
+(F6). Commit the whole file as it then stands (the user has confirmed their
+uncommitted edits are settled and expects them to ride along).
+
+- [ ] **F1: Replace `crates/madura_javac/src/JavacInvoker.kt`** with the
+  binary-relative + `Main.compile` version — copy the exact code from the spec
+  (`docs/superpowers/specs/2026-08-07-madura-javac-design.md`, section
+  "1. Kotlin entrypoint"). Key properties: `java.home == null` → resolve own binary
+  via `ProcessHandle.current().info().command()`, `toRealPath()` if symlink, root =
+  `bin/..`, validate `<root>/lib/modules` (else stderr + exit 2), `setProperty`,
+  then `System.exit(Main.compile(args))`. JDK-core only.
+
+- [ ] **F2: Replace `crates/madura/src/main.rs`** with the pure-passthrough version
+  (Step 5's code block above, as amended — no `dist_root`, no injection).
+
+- [ ] **F3: Rebuild the image:** `cd crates/madura_javac && elide build`
+  (600000 ms timeout).
+
+- [ ] **F4: Run `cargo test -p madura`** — expect failures ONLY of the
+  `Missing*Registration` family (exact-reachability). Capture each error verbatim;
+  the stream-parity and hermetic tests must otherwise behave (a failure outside the
+  Missing-Registration family is a real regression: stop and diagnose).
+
+- [ ] **F5: Trace precise metadata on a plain JVM** (java.home is valid there, so
+  the Kotlin resolution block is skipped):
+
+```bash
+JAR=/home/sam/workspace/labs/SUPERCRITICAL/crates/madura_javac/.dev/artifacts/jar/app/app.jar
+CFG=/home/sam/workspace/labs/SUPERCRITICAL/crates/madura_javac/native-image
+mkdir -p "$CFG"
+cd /tmp/claude-1000/madura-smoke
+"$JAVA_HOME/bin/java" -agentlib:native-image-agent=config-output-dir="$CFG" -cp "$JAR" dev.elide.jvm.JavacInvoker --version
+for w in "" "Hello.java -d out-t1" "Broken.java" "--release 21 Hello.java -d out-t2"; do
+  "$JAVA_HOME/bin/java" -agentlib:native-image-agent=config-merge-dir="$CFG" -cp "$JAR" dev.elide.jvm.JavacInvoker $w || true
+done
+```
+
+- [ ] **F6: Curate + wire.** Keep entries related to javac/`jdk.compiler`
+  (resource bundles, `META-INF/services` service files, `com.sun.tools.javac.*`
+  resources/reflection, charset/locale providers javac touches); drop
+  agent/JVM-startup noise that cannot exist in the image. Add ONE line to the
+  user's `elide.pkl` flags block, inside the `±UnlockExperimentalVMOptions`
+  bracket: `"-H:ConfigurationFileDirectories=native-image"` (relative to the crate
+  dir — the native-image cwd; if relative resolution fails, diagnose from the build
+  report before trying variants).
+
+- [ ] **F7: Iterate to green:** `elide build` → `cargo test -p madura` → on each
+  `Missing*Registration` error, add exactly the named entry to the config in
+  `native-image/` → repeat until 4/4 e2e pass. Also re-verify
+  `cargo test -p madura_javac` (1/1).
+
+- [ ] **F8: Commit** (exactly these paths):
+
+```bash
+git add crates/madura_javac/src/JavacInvoker.kt crates/madura_javac/elide.pkl \
+        crates/madura_javac/native-image crates/madura/src/main.rs Cargo.lock
+git commit -m "feat(madura): binary-relative java.home + exact reachability metadata
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
