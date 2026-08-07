@@ -2,11 +2,19 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-// Copy `src` to `dst` only when missing or size-mismatched (lib/modules is
-// ~180MB; unconditional copies would slow every build).
+// Copy `src` to `dst` only when missing, size-mismatched, or older than the
+// source (lib/modules is ~180MB; unconditional copies would slow every build).
+// `fs::copy` stamps the destination with the copy time, so `dst >= src` holds
+// after staging and breaks when the JDK is updated in place.
 fn stage(src: &Path, dst: &Path) {
     let fresh = match (fs::metadata(src), fs::metadata(dst)) {
-        (Ok(s), Ok(d)) => s.len() == d.len(),
+        (Ok(s), Ok(d)) => {
+            s.len() == d.len()
+                && match (s.modified(), d.modified()) {
+                    (Ok(sm), Ok(dm)) => dm >= sm,
+                    _ => false,
+                }
+        }
         _ => false,
     };
     if !fresh {
