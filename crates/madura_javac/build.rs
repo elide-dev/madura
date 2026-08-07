@@ -9,6 +9,7 @@ fn main() {
 
     println!("cargo::rerun-if-changed=src/JavacInvoker.kt");
     println!("cargo::rerun-if-changed=elide.pkl");
+    println!("cargo::rerun-if-changed=native-image");
 
     // Run from the crate dir, NOT via `-p` from elsewhere: native-image resolves
     // its output dir against the process cwd and aborts otherwise (found in Task 2).

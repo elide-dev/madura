@@ -6,19 +6,11 @@ import "elide:NativeImage.pkl" as NativeImage
 name = "madura-javac"
 
 local jdkTarget = 25
+local kotlinTarget = "2.4"
+local truffleTarget = "25.2.4"
+local gc = "serial"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
-
-kotlin {
-  toolchain = "embedded"
-
-  compilerOptions {
-    allWarningsAsErrors = true
-    jvmTarget = jdkTarget
-    includeRuntime = false
-    noStdlib = true
-  }
-}
 
 jvm {
   main = entry
@@ -33,10 +25,55 @@ jvm {
   }
 }
 
+kotlin {
+  toolchain = "embedded"
+
+  features {
+    kapt = false
+    kotlinx = false
+    reflection = false
+    defaultPlugins = false
+  }
+  compilerOptions {
+    allWarningsAsErrors = true
+    progressiveMode = true
+    extraWarnings = true
+    jvmTarget = jdkTarget
+    includeRuntime = false
+    javaParameters = true
+    incremental = false
+    noStdlib = true
+
+    freeCompilerArgs {
+      "-jvm-default=no-compatibility"
+      "-Xcollection-literals"
+      "-Xintrinsic-const-evaluation"
+      "-Xexplicit-api=disable"
+      "-Xemit-jvm-type-annotations"
+      "-Xassertions=jvm"
+      "-Xjsr305=strict"
+      "-Xstring-concat=indy-with-constants"
+      "-Xno-call-assertions"
+      "-Xno-receiver-assertions"
+      "-Xlambdas=indy"
+      "-Xwhen-expressions=indy"
+      "-Xjdk-release=\(jdkTarget)"
+    }
+  }
+}
+
 sources {
   ["main"] = new Sources.SourceSetSpec {
     paths {
       "src/*.kt"
+    }
+  }
+}
+
+dependencies {
+  maven {
+    packages {
+      "org.graalvm.truffle:truffle-api:\(truffleTarget)"
     }
   }
 }
@@ -58,13 +95,44 @@ artifacts {
 
       flags {
         "--shared"
+        "--gc=\(gc)"
+        "--emit=build-report"
+        "--exact-reachability-metadata"
+        "--enable-sbom=cyclonedx,export"
+        "--future-defaults=all"
+        "-R:MinHeapSize=32m"
+        "-R:MaxHeapSize=256m"
         "-H:+UnlockExperimentalVMOptions"
+        "-H:+UseSystemLocale"
+        "-H:+BlindConstants"
         "-H:-CheckToolchain"
         "-H:+AllowJRTFileSystem"
+        "-H:+RelativeCodePointers"
+        "-H:+TrackPrimitiveValues"
+        "-H:+TrackAccessChain"
+        "-H:+PreserveFramePointer"
+        "-H:+OptDeDuplication"
+        "-H:+ReportExceptionStackTraces"
+        "-H:+UseCompressedReferences"
+        "-H:-ParseRuntimeOptions"
+        "-H:+ReduceCodeSize"
+        "-H:+UseServiceLoaderFeature"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.compiler"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.javac"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.version"
+        "-H:ConfigurationFileDirectories=native-image"
+        "-H:CStandard=C11"
+        "-H:DefaultCharset=UTF-8"
+        "-H:CFI=SW_NONATIVE"
+        "-H:AdvancedObfuscation=export-mapping"
         "-H:-UnlockExperimentalVMOptions"
+        "-J--enable-native-access=org.graalvm.truffle"
+      }
+      classInit {
+        buildtime {
+          "sun.nio.fs.LinuxFileSystem"
+          "sun.nio.fs.LinuxFileSystemProvider"
+        }
       }
     }
   }

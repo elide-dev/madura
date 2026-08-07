@@ -1,0 +1,13 @@
+{
+  "resources": [
+    {
+      "glob": "META-INF/services/com.sun.source.util.Plugin"
+    },
+    {
+      "glob": "META-INF/services/javax.annotation.processing.Processor"
+    },
+    {
+      "glob": "META-INF/services/com.sun.tools.javac.platform.PlatformProvider"
+    }
+  ]
+}
