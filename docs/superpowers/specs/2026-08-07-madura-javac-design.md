@@ -20,7 +20,8 @@ available; the Kotlin source uses JDK core libraries only.
 | CLI scope | Pure argv passthrough; no Rust-side arg parsing; drop `getargs` |
 | FFI surface | `run_main(argc, argv)`; isolate/JNI APIs unused |
 | Distribution | Fully hermetic: `<root>/{bin,lib}` layout; `lib/` ships `libmadura-javac.so`, `modules` (the JDK jimage), and `ct.sym` (for `--release N` compiles) |
-| Platform metadata | Image built with `-H:+AllowJRTFileSystem`; the bin injects `-Djava.home=<dist root>` (resolved relative to the executable) so javac reads `<root>/lib/modules`. No JDK required at runtime |
+| Platform metadata | Image built with `-H:+AllowJRTFileSystem`; the Kotlin entry resolves the binary's absolute path in-process (`ProcessHandle.current().info().command()`, symlinks resolved — mirroring WHIPLASH `Entry.kt`'s `resolveBinpath`), derives `<root>` as `bin/..`, and sets `java.home` before javac starts, so javac reads `<root>/lib/modules`. No JDK, no env vars, no argv injection at runtime. (`-D` argv injection is not viable anyway: the hardened image sets `-H:-ParseRuntimeOptions`.) |
+| Reachability metadata | The image builds under `--exact-reachability-metadata`; javac's precise resource/service/reflection needs are traced with the native-image agent on a JVM run of the app jar, curated into repo-tracked config wired via `-H:ConfigurationFileDirectories`, then closed empirically against `MissingRegistration` errors |
 
 ### Amendment (2026-08-07, during implementation)
 
@@ -56,13 +57,41 @@ exit code:
 package dev.elide.jvm;
 
 import com.sun.tools.javac.Main
+import java.nio.file.Files
+import java.nio.file.Paths
 
 object JavacInvoker {
+  // In the native image `java.home` is unset: resolve the dist root from the
+  // binary's own absolute path (<root>/bin/madura, or target/<profile>/madura
+  // in the dev tree), mirroring Elide Entry.kt's binpath resolution. On a
+  // plain JVM java.home is already valid and this block is skipped.
   @JvmStatic fun main(args: Array<String>) {
+    if (System.getProperty("java.home") == null) {
+      val cmd = ProcessHandle.current().info().command().orElse(null)
+      if (cmd == null) {
+        System.err.println("madura: cannot resolve own binary path")
+        System.exit(2)
+        return
+      }
+      var bin = Paths.get(cmd)
+      if (Files.isSymbolicLink(bin)) bin = bin.toRealPath()
+      val root = bin.parent?.parent
+      if (root == null || !Files.isRegularFile(root.resolve("lib").resolve("modules"))) {
+        System.err.println(
+          "madura: missing platform image at <root>/lib/modules (binary must live in <root>/bin or target/<profile>)")
+        System.exit(2)
+        return
+      }
+      System.setProperty("java.home", root.toString())
+    }
     System.exit(Main.compile(args))
   }
 }
 ```
+
+Binary-path resolution happens in-process via JDK-core `ProcessHandle` (proven to
+work inside native images by WHIPLASH `Entry.kt`), so no environment variables and
+no argv rewriting are involved; the CLI remains pure passthrough end to end.
 
 The former missing-compiler null-check is moot: with `Main` referenced directly, a
 missing `jdk.compiler` fails the native-image build rather than appearing at runtime.
@@ -110,20 +139,19 @@ New `build.rs`:
   `target/<profile>/madura` → `target/lib` and `<root>/bin/madura` → `<root>/lib`)
   and the absolute dep lib dir (fallback for dev robustness).
 
-`src/main.rs`: compute the dist root from the canonicalized executable path
-(`current_exe().parent().parent()`), verify `<root>/lib/modules` exists (clear error
-otherwise), then forward `-Djava.home=<root>` followed by `env::args_os().skip(1)` to
-`madura_javac::invoke`, and `process::exit(code)`. `getargs` is removed from
-dependencies.
+`src/main.rs`: pure passthrough — forward `env::args_os().skip(1)` verbatim to
+`madura_javac::invoke` and `process::exit(code)`. All dist-root/`java.home`
+resolution lives in the Kotlin entry (single place, in-process). `getargs` is
+removed from dependencies.
 
 ## Data flow
 
 ```
 madura Foo.java -d out
-  → Rust resolves dist root from its own exe path; verifies <root>/lib/modules
-  → Rust marshals argv (argv[0] = "madura", argv[1] = -Djava.home=<root>, then user args)
-  → run_main (native-image JavaMainWrapper consumes the -D before main)
-  → JavacInvoker.main
+  → Rust marshals argv verbatim (argv[0] = "madura") — pure passthrough, no root logic
+  → run_main → JavacInvoker.main: java.home unset → resolve own binary via
+    ProcessHandle (symlinks → toRealPath), root = bin/.., validate <root>/lib/modules,
+    System.setProperty("java.home", root)
   → com.sun.tools.javac.Main.compile(args)  (notices→stdout, diagnostics→stderr)
   → javac reads platform classes from <root>/lib/modules via jrt (ct.sym for --release N)
   → .class files written; diagnostics on stdout/stderr unmodified
@@ -141,7 +169,7 @@ identical, so the design does not depend on which one native-image performs.
 | `elide` missing or `elide build` fails | cargo build fails with elide's output |
 | Artifacts missing after elide build | cargo build fails with a clear message |
 | `$JAVA_HOME` unset/invalid at build time | `madura`'s build.rs fails with a clear message (needed to stage `modules`/`ct.sym`) |
-| `<root>/lib/modules` missing at runtime | stderr message naming the expected path, nonzero exit |
+| `<root>/lib/modules` missing at runtime | Kotlin entry: stderr message naming the expected layout, exit 2 |
 | `jdk.compiler` absent | Native-image build fails (the entrypoint references `com.sun.tools.javac.Main` directly); no runtime failure mode |
 | Invalid Java source | Real javac diagnostics on stderr, javac's own exit code |
 | Interior NUL in an argument | Error message on stderr, nonzero exit |
