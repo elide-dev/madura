@@ -7,7 +7,7 @@ name = "madura-javac"
 
 local jdkTarget = 25
 local pkg = "dev.elide.jvm"
-local entry = "\(pkg).JvmInvoker"
+local entry = "\(pkg).JavacInvoker"
 
 kotlin {
   toolchain = "embedded"
@@ -35,9 +35,7 @@ jvm {
 
 sources {
   ["main"] = new Sources.SourceSetSpec {
-    type = "source"
     paths {
-      "src/*.java"
       "src/*.kt"
     }
   }
@@ -45,7 +43,7 @@ sources {
 
 artifacts {
   ["app"] = new Jvm.Jar {
-    name = "app.jar"
+    name = "app"
     main = entry
     sources { "main" }
   }
@@ -60,12 +58,13 @@ artifacts {
 
       flags {
         "--shared"
-        "--verbose"
+        "-H:+UnlockExperimentalVMOptions"
         "-H:-CheckToolchain"
         "-H:+AllowJRTFileSystem"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.compiler"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.javac"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.version"
+        "-H:-UnlockExperimentalVMOptions"
       }
     }
   }
