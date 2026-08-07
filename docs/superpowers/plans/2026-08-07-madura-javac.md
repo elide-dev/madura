@@ -391,6 +391,15 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 > `target/lib/{libmadura-javac.so,modules,ct.sym}` so the dev tree mirrors the dist
 > shape `<root>/{bin,lib}`. No JDK is required at runtime; `$JAVA_HOME` is required
 > at **build** time to source `modules`/`ct.sym`.
+>
+> **AMENDED again (e2e finding, user-adjudicated):** `version_flag_prints_javac_version`
+> exposed that `ToolProvider...run(...)` ignores stdout — javac's `JavacTool.run` sends
+> the version banner and usage to stderr, unlike the real `javac` launcher. Fix (user
+> approved): `crates/madura_javac/src/JavacInvoker.kt` switches its body to
+> `System.exit(com.sun.tools.javac.Main.compile(args))` (import `com.sun.tools.javac.Main`;
+> the null-check is dropped — a missing `jdk.compiler` fails the image build instead).
+> This is a Task 4 fix-round change to Task 2's file, plus an image rebuild. The fix
+> round also commits the `Cargo.lock` refresh from the dependency swap.
 
 **Files:**
 - Test: `crates/madura/tests/e2e.rs` (create — written first)
