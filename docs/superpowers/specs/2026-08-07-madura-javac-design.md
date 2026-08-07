@@ -45,14 +45,28 @@ staged as `target/<profile>/madura` + `target/lib/…` (root = `target/`), so
 
 ### 1. Kotlin entrypoint — `crates/madura_javac/src/JavacInvoker.kt`
 
-Replace the stub body of `JvmInvoker.main`:
+**Amended (2026-08-07, e2e finding):** the entrypoint is `com.sun.tools.javac.Main.compile(args)`
+— the same entry the real `javac` launcher uses — because
+`ToolProvider.getSystemJavaCompiler().run(...)` ignores its stdout parameter and
+routes everything (version banner, usage) to stderr, breaking stream parity with
+`javac`. `Main.compile` splits notices→stdout / diagnostics→stderr and returns the
+exit code:
 
-- `ToolProvider.getSystemJavaCompiler()`; if null, print an error to **stderr** and
-  `System.exit(2)`.
-- Otherwise `System.exit(compiler.run(System.in, System.out, System.err, *args))`.
+```kotlin
+package dev.elide.jvm;
 
-The spread operator and `System.*` calls compile to plain JVM bytecode with no Kotlin
-stdlib dependency.
+import com.sun.tools.javac.Main
+
+object JavacInvoker {
+  @JvmStatic fun main(args: Array<String>) {
+    System.exit(Main.compile(args))
+  }
+}
+```
+
+The former missing-compiler null-check is moot: with `Main` referenced directly, a
+missing `jdk.compiler` fails the native-image build rather than appearing at runtime.
+All calls compile to plain JVM bytecode with no Kotlin stdlib dependency.
 
 `elide.pkl` additionally gains the native-image flag `-H:+AllowJRTFileSystem` so the
 image can read `lib/modules` (jimage) at runtime, plus javac's resource bundles if
@@ -109,8 +123,8 @@ madura Foo.java -d out
   → Rust resolves dist root from its own exe path; verifies <root>/lib/modules
   → Rust marshals argv (argv[0] = "madura", argv[1] = -Djava.home=<root>, then user args)
   → run_main (native-image JavaMainWrapper consumes the -D before main)
-  → JvmInvoker.main
-  → ToolProvider.getSystemJavaCompiler().run(stdin, stdout, stderr, args)
+  → JavacInvoker.main
+  → com.sun.tools.javac.Main.compile(args)  (notices→stdout, diagnostics→stderr)
   → javac reads platform classes from <root>/lib/modules via jrt (ct.sym for --release N)
   → .class files written; diagnostics on stdout/stderr unmodified
   → exit code propagates back
@@ -128,7 +142,7 @@ identical, so the design does not depend on which one native-image performs.
 | Artifacts missing after elide build | cargo build fails with a clear message |
 | `$JAVA_HOME` unset/invalid at build time | `madura`'s build.rs fails with a clear message (needed to stage `modules`/`ct.sym`) |
 | `<root>/lib/modules` missing at runtime | stderr message naming the expected path, nonzero exit |
-| System compiler null at runtime | stderr message, exit 2 |
+| `jdk.compiler` absent | Native-image build fails (the entrypoint references `com.sun.tools.javac.Main` directly); no runtime failure mode |
 | Invalid Java source | Real javac diagnostics on stderr, javac's own exit code |
 | Interior NUL in an argument | Error message on stderr, nonzero exit |
 
