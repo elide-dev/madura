@@ -1,0 +1,68 @@
+amends "elide:project.pkl"
+import "elide:Sources.pkl" as Sources
+import "elide:Jvm.pkl" as Jvm
+import "elide:NativeImage.pkl" as NativeImage
+
+name = "madura-javac"
+
+local jdkTarget = 25
+local pkg = "dev.elide.jvm"
+local entry = "\(pkg).JvmInvoker"
+
+kotlin {
+  toolchain = "embedded"
+
+  compilerOptions {
+    allWarningsAsErrors = true
+    jvmTarget = jdkTarget
+    includeRuntime = false
+    noStdlib = true
+  }
+}
+
+jvm {
+  main = entry
+  target = jdkTarget
+
+  java {
+    compiler {
+      flags {
+        "-Xlint:all"
+      }
+    }
+  }
+}
+
+sources {
+  ["main"] = new Sources.SourceSetSpec {
+    type = "source"
+    paths {
+      "src/*.java"
+      "src/*.kt"
+    }
+  }
+}
+
+artifacts {
+  ["app"] = new Jvm.Jar {
+    name = "app.jar"
+    main = entry
+    sources { "main" }
+  }
+
+  ["native"] = new NativeImage.NativeImage {
+    from { "app" }
+    entrypoint = entry
+
+    options {
+      driverMode = "external"
+      optimization = "s"
+
+      flags {
+        "--shared"
+        "--verbose"
+        "-H:-CheckToolchain"
+      }
+    }
+  }
+}

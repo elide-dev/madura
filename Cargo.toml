@@ -1,0 +1,20 @@
+cargo-features = ["profile-rustflags", "trim-paths", "panic-immediate-abort"]
+
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.94.0"
+authors = ["Elide Technologies, Inc."]
+license = "Private"
+homepage = "https://elide.dev"
+documentation = "https://docs.elide.dev"
+repository = "https://github.com/elide-dev/madura"
+
+[workspace.dependencies]
+getargs = "0.5.0"
+mimalloc = { version = "0.1.52", features = ["v2"] }
