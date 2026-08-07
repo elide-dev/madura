@@ -22,6 +22,8 @@ available; the Kotlin source uses JDK core libraries only.
 | Distribution | Fully hermetic: `<root>/{bin,lib}` layout; `lib/` ships `libmadura-javac.so`, `modules` (the JDK jimage), and `ct.sym` (for `--release N` compiles) |
 | Platform metadata | Image built with `-H:+AllowJRTFileSystem`; the Kotlin entry resolves the binary's absolute path in-process (`ProcessHandle.current().info().command()`, symlinks resolved — mirroring WHIPLASH `Entry.kt`'s `resolveBinpath`), derives `<root>` as `bin/..`, and sets `java.home` before javac starts, so javac reads `<root>/lib/modules`. No JDK, no env vars, no argv injection at runtime. (`-D` argv injection is not viable anyway: the hardened image sets `-H:-ParseRuntimeOptions`.) |
 | Reachability metadata | The image builds under `--exact-reachability-metadata`; javac's precise resource/service/reflection needs are traced with the native-image agent on a JVM run of the app jar, curated into repo-tracked config wired via `-H:ConfigurationFileDirectories`, then closed empirically against `MissingRegistration` errors |
+| Platform files origin | A jlink minimal JDK (`target/jdkroot`, closure `java.base,java.compiler,jdk.compiler`, ~34MB `lib/modules` + `lib/ct.sym` from the jdk.compiler jmod) built by the root `Makefile`; `crates/madura/build.rs` stages from `MADURA_JAVA_HOME` (explicitly injected by make) or its derived default `<target>/jdkroot` — ambient `JAVA_HOME` is never read |
+| Build orchestration (v2) | Root `Makefile` drives the full pipeline in order: elide app jar → jlink `target/jdkroot` → `cargo build` (with `MADURA_JAVA_HOME` injected) → `scripts/make-dist.sh` (dist + `madura-linux-amd64.tar.{gz,xz}`). Plain `cargo build`/`cargo test` still work once `target/jdkroot` exists; if it is missing, `build.rs` fails with an error naming `make` — it never invokes make itself |
 
 ### Amendment (2026-08-07, during implementation)
 
@@ -34,8 +36,9 @@ Verified empirically: the image parses `-Djava.home=<path>` from argv at runtime
 (native-image `JavaMainWrapper` consumes `-D` args before `main`).
 
 Per the user's direction, madura is **fully hermetic**: the distribution carries its
-own `lib/modules` and `lib/ct.sym` (copied from the build-time JDK, `$JAVA_HOME` —
-`ct.sym` serves `--release N` compiles against older platform APIs), laid out as
+own `lib/modules` and `lib/ct.sym` (originally copied from the build-time JDK via
+`$JAVA_HOME`; superseded by the jlink amendment below — the source is now the
+jlink-built `target/jdkroot`, and ambient `JAVA_HOME` is never read), laid out as
 `<root>/bin/<binary>` + `<root>/lib/{libmadura-javac.so,modules,ct.sym}`. The binary
 computes `<root>` from its own (canonicalized) executable path and injects
 `-Djava.home=<root>` ahead of user args. In the cargo dev tree the same shape is
@@ -168,7 +171,7 @@ identical, so the design does not depend on which one native-image performs.
 | --- | --- |
 | `elide` missing or `elide build` fails | cargo build fails with elide's output |
 | Artifacts missing after elide build | cargo build fails with a clear message |
-| `$JAVA_HOME` unset/invalid at build time | `madura`'s build.rs fails with a clear message (needed to stage `modules`/`ct.sym`) |
+| `target/jdkroot` missing at cargo build time (and no `MADURA_JAVA_HOME` injected) | `madura`'s build.rs fails with a clear message naming `make` as the fix; it never builds the jdkroot itself |
 | `<root>/lib/modules` missing at runtime | Kotlin entry: stderr message naming the expected layout, exit 2 |
 | `jdk.compiler` absent | Native-image build fails (the entrypoint references `com.sun.tools.javac.Main` directly); no runtime failure mode |
 | Invalid Java source | Real javac diagnostics on stderr, javac's own exit code |
@@ -199,6 +202,38 @@ Rust.
 **Outcome:** the compiler IS present (gate passed), but the risk materialized as the
 missing-`java.home`/jrt problem described in the Amendment above; resolved via
 `-H:+AllowJRTFileSystem` + the hermetic dist layout.
+
+### Amendment (2026-08-07, jlink minimal JDK — user-led restructure)
+
+The user moved orchestration into a root `Makefile` and introduced a jlink-built
+minimal JDK; this amendment records the agreed shape and the fixes owned by the
+implementation:
+
+- **Pipeline:** `make` = elide app jar (now modular: `src/module-info.java`,
+  `src/*.java` in the pkl sources) → `jlink … --add-modules
+  java.base --add-modules java.compiler --add-modules jdk.compiler --output
+  target/jdkroot` → `MADURA_JAVA_HOME=$PWD/target/jdkroot cargo build --release` →
+  `make-dist`. The app module is deliberately NOT in the closure (keeps
+  `kotlin.stdlib` out of the image); `lib/modules` drops ~172MB → ~34MB and
+  `lib/ct.sym` comes from the jdk.compiler jmod.
+- **Compile-against surface (user decision):** default mode sees only the shipped
+  closure's APIs; `--release N` (including the current release) retains the full
+  JDK surface via `ct.sym`. This asymmetry is accepted.
+- **Makefile fixes (implementation-owned):** `rm -rf` before jlink (re-runs die on
+  the existing output dir); source prerequisites on the app-jar rule (currently
+  builds only when missing); `target/dist` must be a `.PHONY dist` target (the real
+  directory satisfies the rule after the first run); `clean` path typo
+  (`.dev/crates/…` → `crates/madura_javac/.dev/artifacts`).
+- **build.rs fixes (implementation-owned):** default `MADURA_JAVA_HOME` to
+  `<target>/jdkroot` derived from `OUT_DIR` (no ambient state); clear
+  run-make-first error when `lib/modules` is absent; stale text still says
+  "JAVA_HOME"; `rerun-if-env-changed` must watch `MADURA_JAVA_HOME`.
+- **make-dist.sh fixes (implementation-owned):** second-run failures — `cp -fr`
+  nests into the existing `madura-linux-amd64` dir; `gzip`/`xz -k` abort on
+  existing archives under `set -e`; `du` paths are cwd-dependent.
+- **Flagged, user's call, untouched:** the jlink `--module-path app.jar` line is
+  inert while the app module isn't in `--add-modules`; the pkl carries a kotlinc
+  `--module-path` workaround for kotlin-stdlib (documented in-file).
 
 ## Out of scope
 
