@@ -1,3 +1,5 @@
 [tools]
+aube = "latest"
 bun = "latest"
 "github:elide-dev/elide" = "latest"
+hk = "latest"
