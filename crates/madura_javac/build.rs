@@ -13,8 +13,10 @@ fn main() {
 
     // Run from the crate dir, NOT via `-p` from elsewhere: native-image resolves
     // its output dir against the process cwd and aborts otherwise (found in Task 2).
+    // elide's cache misses ConfigurationFileDirectories contents; see elide-dev/WHIPLASH#1416
     let output = Command::new("elide")
         .arg("build")
+        .arg("--no-cache")
         .current_dir(&manifest_dir)
         .output()
         .expect("failed to run `elide` — is it installed and on PATH? (try `mise install`)");
