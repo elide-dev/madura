@@ -54,7 +54,7 @@ routes everything (version banner, usage) to stderr, breaking stream parity with
 exit code:
 
 ```kotlin
-package dev.elide.jvm;
+package dev.elide.jvm
 
 import com.sun.tools.javac.Main
 import java.nio.file.Files

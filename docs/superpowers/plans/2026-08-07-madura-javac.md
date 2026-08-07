@@ -731,16 +731,19 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Dist packaging, workspace verification + docs
+### Task 5: Dist packaging + workspace verification
+
+> **TRIMMED per user directive ("relentlessly minimal"):** the README
+> documentation step is cut. Deliverables: green workspace, the dist script, a
+> hermetic dist check. Nothing else.
 
 **Files:**
 - Create: `scripts/make-dist.sh` (assemble the hermetic distribution)
-- Modify: `crates/madura_javac/README.md` (document the build flow)
 
 **Interfaces:**
 - Consumes: everything from Tasks 2–4; the staged `target/lib/` contents.
 - Produces: `target/dist/{bin/madura, lib/{libmadura-javac.so,modules,ct.sym}}`;
-  green workspace build/test/clippy; README documenting how the pieces fit.
+  green workspace build/test/clippy.
 
 - [ ] **Step 1: Full workspace verification**
 
@@ -796,53 +799,11 @@ ls out-dist/Hello.class
 Expected: version string prints; `Hello.class` produced — with no `JAVA_HOME` in the
 environment and no JDK consulted (everything from `target/dist/lib`).
 
-- [ ] **Step 4: Document the build flow in the crate README**
-
-Replace/append in `crates/madura_javac/README.md` so it contains:
-
-```markdown
-# madura_javac
-
-FFI crate wrapping `madura-javac.so`, a GraalVM native-image shared library that
-embeds the system Java compiler. The Kotlin entrypoint (`src/JavacInvoker.kt`)
-is compiled against JDK core libraries only (no Kotlin stdlib, no reflection).
-
-## Build flow
-
-`cargo build` drives everything:
-
-1. `build.rs` runs `elide build -p <this crate>` (re-run only when
-   `src/JavacInvoker.kt` or `elide.pkl` change; native-image takes minutes).
-2. The artifact `.dev/artifacts/native-image/madura-javac.so` is staged into
-   `OUT_DIR` as `libmadura-javac.so` (the artifact ships without a `lib` prefix
-   or SONAME; the renamed copy is the canonical link/runtime name).
-3. Cargo links `-l madura-javac` and exposes the staging dir to dependents as
-   `DEP_MADURA_JAVAC_LIB_DIR` (via the `links = "madura-javac"` key).
-
-The `madura` bin crate stages a hermetic, dist-shaped `target/lib/` next to the
-profile dir — `libmadura-javac.so` plus `modules` and `ct.sym` from the
-build-time `$JAVA_HOME` — and links with rpaths `$ORIGIN/../lib` + the absolute
-staging dir. At runtime the binary injects `-Djava.home=<dist root>` (resolved
-from its own path; the native image parses `-D` argv before `main`), so
-`target/<profile>/madura`, its tests, and the shipped `<root>/{bin,lib}` dist
-all run with **no JDK and no environment setup** (`-H:+AllowJRTFileSystem` in
-`elide.pkl` provides jrt access to `lib/modules`). `scripts/make-dist.sh`
-assembles `target/dist`.
-
-## API
-
-`madura_javac::invoke(args) -> Result<i32, NulArgError>` — invokes the embedded
-`javac` with passthrough argv and returns its exit code. The image may terminate
-the process directly (`System.exit`); treat `invoke` as the process's final call.
-
-Requires `elide` on PATH (`mise install`) and `$JAVA_HOME` at build time.
-```
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/make-dist.sh crates/madura_javac/README.md
-git commit -m "feat(dist): hermetic dist packaging + build-flow docs
+git add scripts/make-dist.sh
+git commit -m "feat(dist): hermetic dist packaging
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
