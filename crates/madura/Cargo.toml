@@ -1,0 +1,10 @@
+cargo-features = ["trim-paths"]
+
+[package]
+name = "madura"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+getargs = { workspace = true }
+mimalloc = { workspace = true, features = ["v2"] }

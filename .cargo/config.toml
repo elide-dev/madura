@@ -1,0 +1,118 @@
+[unstable]
+sbom = true
+profile-rustflags = true
+build-std = ["std", "core", "alloc", "proc_macro", "panic_abort"]
+build-std-features = ["compiler-builtins-mem"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+panic = "abort"
+incremental = false
+overflow-checks = false
+trim-paths = "all"
+codegen-units = 1
+debug = true
+split-debuginfo = "unpacked"
+
+rustflags = [
+  # Enable unstable options access.
+  "-Zunstable-options",
+
+  # MIR-level wins that compound across monomorphizations.
+  "-Zinline-mir=yes",
+  "-Zmir-opt-level=2",  # do NOT go to 3; persistent miscompiles
+  "-Zshare-generics=y",
+]
+
+[target.x86_64-unknown-linux-musl]
+linker = "clang-22"
+rustflags = [
+  # === Begin unstable options. =====
+  "-Zunstable-options",
+
+  # ─── CPU & ISA ──────────────────────────────────────────────
+  # Target CPU.
+  "-Ctarget-cpu=x86-64-v3",
+  # Tune for Zen 3.
+  "-Ztune-cpu=znver3",
+  # Enable broadly supported CPU features.
+  "-Ctarget-feature=+aes,+rdrand",
+  # Static linking only on musl.
+  "-Ctarget-feature=+crt-static",
+
+  # ─── Relocation + Code Model ────────────────────────────────
+  # Enforce static relocation model.
+  "-Crelocation-model=static",
+  # Employ the smallest "code model" possible on the Rust side.
+  "-Ccode-model=small",
+  # "-Crelax-elf-relocations=yes",
+  # We don't need full RELRO because overflows are impossible in guest code.
+  "-Crelro-level=partial",
+
+  # ─── LTO: fat, linker-plugin via clang+lld ──────────────────
+  # Emit LLVM bitcode for linker-plugin LTO. Cargo's final link uses clang+lld
+  # to perform fat LTO across Rust crates + native-image output.
+  "-Cembed-bitcode=yes",
+  "-Clinker-plugin-lto",
+  "-Clinker-flavor=gnu-lld-cc",
+
+  # ─── Compiler: General compiler tuning + opt. ───────────────
+  # Eliminate virtual functions if LLVM can prove them unused at the LTO phase.
+  # "-Zvirtual-function-elimination",
+
+  # ─── Debugging ──────────────────────────────────────────────
+  # Kill panic/debug/location machinery we never want in release.
+  "-Zlocation-detail=none",
+  # Omit debug formatting code for common types.
+  "-Zfmt-debug=none",
+  # Thread locals are confined to the inner binary.
+  "-Ztls-model=local-exec",
+
+  # ─── Visibility: safe here, meaningful LTO win ──────────────
+  # "-Zdefault-hidden-visibility=yes",
+
+  # ─── Linker hardening for size + startup ────────────────────
+  # Use our fast-start entrypoint on x86-64 linux.
+  "-Clink-arg=-Wl,-e,_start_fast",
+  # Fold identical code blocks.
+  "-Clink-arg=-Wl,--icf=all",
+  # Garbage-collect unused sections.
+  "-Clink-arg=-Wl,--gc-sections",
+  # Link as-needed.
+  "-Clink-arg=-Wl,--as-needed",
+  # Employ GNU-style hashing.
+  "-Clink-arg=-Wl,--hash-style=gnu",
+  # Eager-bind.
+  "-Clink-arg=-Wl,-z,now",
+  # Read-only "RELRO" defense.
+  "-Clink-arg=-Wl,-z,relro",
+  # Maps .text with tighter perms.
+  "-Clink-arg=-Wl,-z,separate-code",
+  # Prefer lld.
+  "-Clink-arg=-fuse-ld=lld",
+
+  # ─── Unstable gates & project cfgs ──────────────────────────
+  # Enable macro backtraces.
+  "-Zmacro-backtrace",
+  # Enable Reqwest unstable features.
+  "--cfg",
+  "reqwest_unstable",
+]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+  # Enforce completely position-independent executables.
+  "-Crelocation-model=pic",
+
+  # Target CPU.
+  "-Ctarget-cpu=x86-64-v3",
+
+  # Embed bitcode for LTO at final link.
+  "-Cembed-bitcode=yes",
+
+  # Enable Reqwest unstable features.
+  "--cfg",
+  "reqwest_unstable",
+]
+
