@@ -1,2 +1,6 @@
 .dev/artifacts
 .dev/dependencies
+.dev/jvm
+.dev/cache
+.dev/staging
+!.dev/elide.lock.v2.bin
