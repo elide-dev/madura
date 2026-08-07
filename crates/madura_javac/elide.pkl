@@ -62,6 +62,10 @@ artifacts {
         "--shared"
         "--verbose"
         "-H:-CheckToolchain"
+        "-H:+AllowJRTFileSystem"
+        "-H:IncludeResourceBundles=com.sun.tools.javac.resources.compiler"
+        "-H:IncludeResourceBundles=com.sun.tools.javac.resources.javac"
+        "-H:IncludeResourceBundles=com.sun.tools.javac.resources.version"
       }
     }
   }
