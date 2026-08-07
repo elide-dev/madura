@@ -4,6 +4,8 @@ cargo-features = ["trim-paths"]
 name = "madura_javac"
 version = "0.1.0"
 edition = "2024"
+links = "madura-javac"
+build = "build.rs"
 
 [dependencies]
 # None yet.

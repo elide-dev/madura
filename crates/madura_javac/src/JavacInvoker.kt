@@ -2,7 +2,7 @@ package dev.elide.jvm;
 
 import javax.tools.ToolProvider
 
-object JvmInvoker {
+object JavacInvoker {
   @JvmStatic fun main(args: Array<String>) {
     val compiler = ToolProvider.getSystemJavaCompiler()
     if (compiler == null) {
