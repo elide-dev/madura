@@ -101,7 +101,7 @@ artifacts {
         "--enable-sbom=cyclonedx,export"
         "--future-defaults=all"
         "-R:MinHeapSize=32m"
-        "-R:MaxHeapSize=256m"
+        "-R:MaxHeapSize=1g"
         "-H:+UnlockExperimentalVMOptions"
         "-H:+UseSystemLocale"
         "-H:+BlindConstants"
