@@ -30,7 +30,13 @@ clean:
 target:
 	$(RULE)mkdir target
 
-target/dist:
+MADURA_SRCS := $(wildcard crates/madura/src/*.rs) crates/madura/build.rs \
+	$(wildcard crates/madura_javac/src/*.rs) crates/madura_javac/build.rs \
+	scripts/make-dist.sh Cargo.toml Cargo.lock
+
+# Depends on jdkroot rather than relying on `all` listing them in order: the
+# cargo build stages lib/{modules,ct.sym} out of it.
+target/dist: target/jdkroot crates/madura_javac/.dev/artifacts/jar/app/app.jar $(MADURA_SRCS)
 	@echo "+ Building madura..."
 	$(RULE)MADURA_JAVA_HOME=$(PROJECT_ROOT)/target/jdkroot $(CARGO) build --release
 	$(RULE)./scripts/make-dist.sh
@@ -43,7 +49,11 @@ crates/madura_javac/.dev/dependencies:
 	@echo "+ Installing Maven dependencies..."
 	$(RULE)cd crates/madura_javac && $(ELIDE) install --ecosystems maven
 
-crates/madura_javac/.dev/artifacts/jar/app/app.jar crates/madura_javac/.dev/artifacts/native-image:
+JAVAC_IMAGE_SRCS := $(wildcard crates/madura_javac/src/*.kt) \
+	crates/madura_javac/elide.pkl \
+	$(wildcard crates/madura_javac/native-image/*)
+
+crates/madura_javac/.dev/artifacts/jar/app/app.jar crates/madura_javac/.dev/artifacts/native-image: $(JAVAC_IMAGE_SRCS)
 	@echo "+ Building javac image..."
 	$(RULE)cd crates/madura_javac && $(ELIDE) build --no-cache --release
 

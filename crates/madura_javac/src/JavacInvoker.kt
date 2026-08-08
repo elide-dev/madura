@@ -21,20 +21,34 @@ object JavacInvoker {
   // java.home is already correct and there is no <root>/lib/modules to prefer.
   @JvmStatic fun main(args: Array<String>) {
     val cmd = ProcessHandle.current().info().command().orElse(null)
-    var root: java.nio.file.Path? = null
+    var candidate: java.nio.file.Path? = null
     if (cmd != null) {
       var bin = Paths.get(cmd)
       if (Files.isSymbolicLink(bin)) bin = bin.toRealPath()
-      val candidate = bin.parent?.parent
-      if (candidate != null && Files.isRegularFile(candidate.resolve("lib").resolve("modules"))) {
-        root = candidate
-      }
+      candidate = bin.parent?.parent
     }
+    val root =
+      if (candidate != null && Files.isRegularFile(candidate.resolve("lib").resolve("modules"))) candidate else null
+
+    // The ambient property is only worth deferring to when it names a real JDK.
+    // In the image it is whatever native-image baked in from the build machine,
+    // which on most hosts is a path that does not exist — and on the builder
+    // itself is a JDK that has nothing to do with this distribution.
+    val ambient = System.getProperty("java.home")?.let { Paths.get(it) }
+    val ambientUsable = ambient != null && Files.isRegularFile(ambient.resolve("lib").resolve("modules"))
+
     if (root != null) {
       System.setProperty("java.home", root.toString())
-    } else if (System.getProperty("java.home") == null) {
-      System.err.println(
-        "madura: missing platform image at <root>/lib/modules (binary must live in <root>/bin or target/<profile>)")
+    } else if (!ambientUsable) {
+      // Report every input: the interesting failures are the ones where this
+      // resolved on the machine that built the binary and not on the one
+      // running it, and a bare NoSuchFileException from inside javac names the
+      // build machine's path without explaining how it was reached.
+      System.err.println("madura: cannot locate the shipped platform image at <root>/lib/modules")
+      System.err.println("  argv0 (ProcessHandle): ${cmd ?: "<unavailable>"}")
+      System.err.println("  derived root:          ${candidate ?: "<none>"}")
+      System.err.println("  ambient java.home:     ${ambient ?: "<unset>"}")
+      System.err.println("  java.vm.name:          ${System.getProperty("java.vm.name") ?: "<unset>"}")
       System.exit(2)
       return
     }
