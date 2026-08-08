@@ -98,28 +98,49 @@ fn output_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// Run `compiler` to completion with output discarded, asserting it succeeded.
-fn compile(compiler: &Path, sources: &[PathBuf], out: &Path) {
-    let status = Command::new(compiler)
-        .args(sources)
-        .arg("-d")
-        .arg(out)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", compiler.display()));
-    assert!(status.success(), "{} failed: {status}", compiler.display());
+/// The command a compile benchmark measures.
+fn compile_command(compiler: &Path, sources: &[PathBuf], out: &Path) -> Command {
+    let mut cmd = Command::new(compiler);
+    cmd.args(sources).arg("-d").arg(out);
+    cmd
 }
 
-/// Run `compiler --version`, asserting it succeeded.
-fn version(compiler: &Path) {
-    let status = Command::new(compiler)
-        .arg("--version")
+/// The command a startup benchmark measures.
+fn version_command(compiler: &Path) -> Command {
+    let mut cmd = Command::new(compiler);
+    cmd.arg("--version");
+    cmd
+}
+
+/// Run `cmd` once with its output captured, panicking with everything the
+/// compiler wrote if it fails.
+///
+/// The measured loop discards output so the pipes cost nothing, which leaves a
+/// failure there indistinguishable from a bare `exit status: 1`. Every
+/// benchmark verifies once up front, outside the measurement, so a compiler
+/// that cannot run reports its own diagnostics instead of a naked exit code.
+fn verify(mut cmd: Command) {
+    let label = format!("{:?}", cmd.get_program());
+    let out = cmd
+        .output()
+        .unwrap_or_else(|e| panic!("failed to spawn {label}: {e}"));
+    assert!(
+        out.status.success(),
+        "{label} failed: {}\n--- stdout ---\n{}--- stderr ---\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+}
+
+/// Run `cmd` to completion with output discarded — the measured path.
+fn run(mut cmd: Command) {
+    let status = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .unwrap_or_else(|e| panic!("failed to spawn {}: {e}", compiler.display()));
-    assert!(status.success(), "{} failed: {status}", compiler.display());
+        .unwrap_or_else(|e| panic!("failed to spawn {:?}: {e}", cmd.get_program()));
+    assert!(status.success(), "{:?} failed: {status}", cmd.get_program());
 }
 
 /// Compiling the smoke corpus with the shipped `madura`.
@@ -128,7 +149,14 @@ fn compile_smoke_madura(bencher: Bencher) {
     let compiler = madura_bin();
     let sources = smoke_sources();
     let out = output_dir("madura");
-    bencher.bench(|| compile(black_box(&compiler), black_box(&sources), black_box(&out)));
+    verify(compile_command(&compiler, &sources, &out));
+    bencher.bench(|| {
+        run(compile_command(
+            black_box(&compiler),
+            black_box(&sources),
+            black_box(&out),
+        ))
+    });
 }
 
 /// The same compile, driven by the JDK's `javac` — the baseline `madura` exists
@@ -138,7 +166,14 @@ fn compile_smoke_javac(bencher: Bencher) {
     let compiler = javac_bin();
     let sources = smoke_sources();
     let out = output_dir("javac");
-    bencher.bench(|| compile(black_box(&compiler), black_box(&sources), black_box(&out)));
+    verify(compile_command(&compiler, &sources, &out));
+    bencher.bench(|| {
+        run(compile_command(
+            black_box(&compiler),
+            black_box(&sources),
+            black_box(&out),
+        ))
+    });
 }
 
 /// `--version` with no compilation at all: the floor of what an invocation can
@@ -146,12 +181,14 @@ fn compile_smoke_javac(bencher: Bencher) {
 #[divan::bench(sample_count = SAMPLE_COUNT, sample_size = SAMPLE_SIZE)]
 fn startup_madura(bencher: Bencher) {
     let compiler = madura_bin();
-    bencher.bench(|| version(black_box(&compiler)));
+    verify(version_command(&compiler));
+    bencher.bench(|| run(version_command(black_box(&compiler))));
 }
 
 /// The same floor for `javac`, which pays for a full JVM boot.
 #[divan::bench(sample_count = SAMPLE_COUNT, sample_size = SAMPLE_SIZE)]
 fn startup_javac(bencher: Bencher) {
     let compiler = javac_bin();
-    bencher.bench(|| version(black_box(&compiler)));
+    verify(version_command(&compiler));
+    bencher.bench(|| run(version_command(black_box(&compiler))));
 }
