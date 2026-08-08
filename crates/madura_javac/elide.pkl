@@ -129,6 +129,21 @@ artifacts {
           "sun.nio.fs.LinuxFileSystem"
           "sun.nio.fs.LinuxFileSystemProvider"
         }
+        // `SystemImage.RUNTIME_HOME` is a static final resolved from `java.home`
+        // at class-init, and `JrtFileSystemProvider` caches the filesystem built
+        // from it. Initialized at build time, the image freezes the *builder's*
+        // JDK path: javac then reads that instead of `<root>/lib/modules`, and
+        // dies with NoSuchFileException anywhere that path is absent. Setting
+        // `java.home` from `main` cannot undo it — the value is already
+        // captured — and `-D` injection is unavailable under
+        // `-H:-ParseRuntimeOptions`, so the resolution has to be deferred here.
+        // Only `SystemImage`: the provider itself is registered through
+        // ServiceLoader and so lives in the image heap, which build-time
+        // initialization is required for. Deferring the class that resolves the
+        // path is enough, because the filesystem is built lazily on first use.
+        runtime {
+          "jdk.internal.jrtfs.SystemImage"
+        }
       }
     }
   }
