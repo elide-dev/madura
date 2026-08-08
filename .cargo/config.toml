@@ -1,53 +1,5 @@
-[unstable]
-sbom = true
-profile-rustflags = true
-build-std = ["std", "core", "alloc", "proc_macro", "panic_abort"]
-build-std-features = ["compiler-builtins-mem"]
-
-[profile.release]
-opt-level = 3
-lto = "fat"
-panic = "abort"
-incremental = false
-overflow-checks = false
-trim-paths = "all"
-codegen-units = 1
-debug = true
-split-debuginfo = "unpacked"
-
-rustflags = [
-  # Enable unstable options access.
-  "-Zunstable-options",
-
-  # MIR-level wins that compound across monomorphizations.
-  "-Zinline-mir=yes",
-  "-Zmir-opt-level=2",  # do NOT go to 3; persistent miscompiles
-  "-Zshare-generics=y",
-]
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = [
-  # Enforce completely position-independent executables.
-  "-Crelocation-model=pic",
-
-  # Target CPU.
-  "-Ctarget-cpu=x86-64-v3",
-]
-
-[target.aarch64-unknown-linux-gnu]
-rustflags = [
-  # Enforce completely position-independent executables.
-  "-Crelocation-model=pic",
-
-  # No `-Ctarget-cpu`: baseline armv8-a, so the distribution runs anywhere the
-  # amd64 build's `x86-64-v3` floor would be considered reasonable.
-]
-
-# Compiled C — mimalloc is the only such source — decides the binary's glibc
-# floor. A C23-default compiler (GCC 15+) binds `strtol` to glibc 2.38's
-# `__isoc23_strtol`, which lifts the floor from 2.34 to 2.38 and makes the
-# result unrunnable on Ubuntu 22.04 (2.35) or Debian 12. Pinning C17 keeps the
-# floor a property of the source rather than of whichever GCC happened to build
-# it. Cargo leaves an already-set CFLAGS alone.
+# Default platform-metadata JDK for build scripts: the jlink'd root the
+# Makefile also builds. `relative = true` anchors it to the workspace root.
+# A real environment variable (Makefile, CI) takes precedence over this value.
 [env]
-CFLAGS = "-std=gnu17"
+MADURA_JAVA_HOME = { value = "target/jdkroot", relative = true }

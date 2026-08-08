@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 // Copy `src` to `dst` only when missing, size-mismatched, or older than the
 // source (lib/modules is ~180MB; unconditional copies would slow every build).
@@ -23,6 +24,31 @@ fn stage(src: &Path, dst: &Path) {
     }
 }
 
+fn manifest_dir() -> PathBuf {
+    PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+}
+
+// Mirror of the Makefile's `target/jdkroot` rule. `--module-path app.jar` is
+// omitted: only platform modules are added, so it never affected the output.
+fn jlink_jdkroot(out: &Path) {
+    // jlink refuses to write into an existing directory, and a half-built
+    // root from an interrupted run must not survive.
+    let _ = fs::remove_dir_all(out);
+    let status = Command::new("jlink")
+        .args([
+            "--add-modules",
+            "java.base,java.compiler,jdk.compiler",
+            "--strip-debug",
+            "--no-header-files",
+            "--no-man-pages",
+            "--output",
+        ])
+        .arg(out)
+        .status()
+        .expect("failed to run `jlink` — is a JDK on PATH? (try `mise install`)");
+    assert!(status.success(), "jlink failed: {status}");
+}
+
 fn main() {
     let lib_dir = PathBuf::from(
         env::var("DEP_MADURA_JAVAC_LIB_DIR")
@@ -30,12 +56,35 @@ fn main() {
     );
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // Hermetic platform metadata is sourced from the build-time JDK.
+    // Hermetic platform metadata is sourced from the build-time JDK. The
+    // default comes from .cargo/config.toml ([env] → <workspace>/target/jdkroot);
+    // a real environment variable (Makefile, CI) overrides it.
     let java_home = PathBuf::from(env::var("MADURA_JAVA_HOME").expect(
         "MADURA_JAVA_HOME must point at a JDK at build time (source of lib/modules and lib/ct.sym)",
     ));
+
+    // When the *default* jdkroot is what's named and it hasn't been built yet,
+    // jlink it here so bare `cargo build`/`cargo clippy` work on a fresh tree.
+    // An explicitly-set path is never auto-created: pointing MADURA_JAVA_HOME
+    // at a JDK that does not exist is a misconfiguration worth failing on.
+    let default_jdkroot = manifest_dir()
+        .ancestors()
+        .nth(2)
+        .expect("crate lives at <workspace>/crates/madura")
+        .join("target/jdkroot");
+    if java_home == default_jdkroot && !java_home.join("lib/modules").is_file() {
+        jlink_jdkroot(&java_home);
+    }
+
     let modules = java_home.join("lib/modules");
     let ct_sym = java_home.join("lib/ct.sym");
+
+    // Track the staged inputs themselves: a missing path always reruns the
+    // script, so deleting target/jdkroot (or updating the JDK in place) heals
+    // on the next bare `cargo build` instead of silently reusing the cache.
+    println!("cargo::rerun-if-changed={}", modules.display());
+    println!("cargo::rerun-if-changed={}", ct_sym.display());
+
     assert!(
         modules.is_file(),
         "not a jimage-bearing JDK: {}",
@@ -67,7 +116,7 @@ fn main() {
     stage(&modules, &staged_lib.join("modules"));
     stage(&ct_sym, &staged_lib.join("ct.sym"));
 
-    println!("cargo::rerun-if-env-changed=JAVA_HOME");
+    println!("cargo::rerun-if-env-changed=MADURA_JAVA_HOME");
     println!("cargo::rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
     println!("cargo::rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
 }
