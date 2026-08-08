@@ -49,6 +49,7 @@ crates/madura_javac/.dev/artifacts/jar/app/app.jar crates/madura_javac/.dev/arti
 
 target/jdkroot: target crates/madura_javac/.dev/artifacts/jar/app/app.jar
 	@echo "+ Building minimal JDK..."
+	$(RULE)rm -fr target/jdkroot
 	$(RULE)$(JLINK) \
 		--module-path ./crates/madura_javac/.dev/artifacts/jar/app/app.jar \
 		--add-modules java.base \
