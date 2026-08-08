@@ -1,2 +1,4 @@
 /bin/mise linguist-generated -linguist-detectable
 /bin/*.* linguist-generated -linguist-detectable
+/scripts/make-dist.sh -linguist-detectable
+/scripts/setup-graalvm.sh -linguist-detectable
