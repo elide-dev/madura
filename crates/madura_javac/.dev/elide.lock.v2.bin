@@ -1,14 +1,12 @@
-
-
-maven-dependenciesê	
-	requestedÜ	
-8dev.elide.tooling.build.state.DirectStateProvider.RecordŸ	
-state lLà{GÎn~_^˜~ÊP‹¹c^@mAY,¹hha8ó
-Fdev.elide.tooling.jvm.maven.MavenDependenciesTask.ManifestDependencies¨
-Ö
-mainª
-	dev.elide	elide-api1.0.0*
-org.graalvm.truffletruffle-api25.2.4-
+Ô	
+maven-dependencies½	
+	requested¯	
+8dev.elide.tooling.build.state.DirectStateProvider.Recordò
+state BîÄ@Ù³VŞ¬V-Q‹Z0«G‰º@Yjü’Jµè¯Æ
+Fdev.elide.tooling.jvm.maven.MavenDependenciesTask.ManifestDependenciesû
+©
+main~
+	dev.elide	elide-api1.0.0-
 org.jetbrains.kotlinkotlin-reflect2.4.0,
 org.jetbrains.kotlinkotlin-stdlib2.4.0!
 	dev.elide	elide-api1.0.0

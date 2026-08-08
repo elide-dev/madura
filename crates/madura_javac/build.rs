@@ -17,16 +17,25 @@ fn main() {
     let output = Command::new("elide")
         .arg("build")
         .arg("--no-cache")
+        .arg("--release")
         .current_dir(&manifest_dir)
         .output()
         .expect("failed to run `elide` — is it installed and on PATH? (try `mise install`)");
     // Forward elide's output to stderr: stdout is reserved for cargo directives.
     eprint!("{}", String::from_utf8_lossy(&output.stdout));
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.status.success(), "`elide build` failed: {}", output.status);
+    assert!(
+        output.status.success(),
+        "`elide build` failed: {}",
+        output.status
+    );
 
     let so = manifest_dir.join(".dev/artifacts/native-image/madura-javac.so");
-    assert!(so.is_file(), "missing native-image artifact: {}", so.display());
+    assert!(
+        so.is_file(),
+        "missing native-image artifact: {}",
+        so.display()
+    );
 
     // The artifact has no `lib` prefix and no SONAME; the renamed copy is the
     // canonical name for both link time (-l madura-javac) and runtime lookup.

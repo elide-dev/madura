@@ -31,8 +31,8 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Hermetic platform metadata is sourced from the build-time JDK.
-    let java_home = PathBuf::from(env::var("JAVA_HOME").expect(
-        "JAVA_HOME must point at a JDK at build time (source of lib/modules and lib/ct.sym)",
+    let java_home = PathBuf::from(env::var("MADURA_JAVA_HOME").expect(
+        "MADURA_JAVA_HOME must point at a JDK at build time (source of lib/modules and lib/ct.sym)",
     ));
     let modules = java_home.join("lib/modules");
     let ct_sym = java_home.join("lib/ct.sym");
