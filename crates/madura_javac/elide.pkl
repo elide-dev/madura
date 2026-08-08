@@ -70,15 +70,6 @@ sources {
   ["main"] = new Sources.SourceSetSpec {
     paths {
       "src/*.kt"
-      "src/*.java"
-    }
-  }
-}
-
-dependencies {
-  maven {
-    packages {
-      "org.jetbrains.kotlin:kotlin-stdlib:\(kotlinVersion)"
     }
   }
 }
