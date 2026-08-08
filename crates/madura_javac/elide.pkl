@@ -9,7 +9,7 @@ local jdkTarget = 25
 local kotlinTarget = "2.4"
 local kotlinVersion = "2.4.0"
 local truffleTarget = "25.2.4"
-local gc = "G1"
+local gc = "serial"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
 
