@@ -1,5 +1,6 @@
 package dev.elide.jvm
 
+import com.sun.source.util.JavacTask
 import com.sun.tools.javac.Main
 import org.graalvm.nativeimage.c.function.CEntryPoint
 import org.graalvm.nativeimage.IsolateThread
@@ -9,6 +10,10 @@ import org.graalvm.nativeimage.c.type.CTypeConversion
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.Path
+import javax.tools.Diagnostic
+import javax.tools.DiagnosticListener
+import javax.tools.JavaFileObject
+import javax.tools.ToolProvider
 
 object JavacInvoker {
   private fun resolveBinPath(cmd: String?): Path? {
@@ -23,8 +28,39 @@ object JavacInvoker {
     return root
   }
 
-  private fun runMainCompile(args: Array<String>): Int {
-    return Main.compile(args)
+  private fun runMainCompile(checkOnly: Boolean, args: Array<String>): Int {
+    return if (checkOnly) runCheck(args) else Main.compile(args)
+  }
+
+  // Check mode drives javac through the public JavacTask API instead of the
+  // CLI: `analyze()` runs parse, enter, attribution and flow — annotation
+  // processing included, so every error and warning surfaces — and the task
+  // is dropped before `generate()`, so nothing is ever written to disk. Exit
+  // codes follow javac's convention: 1 when errors were reported, else 0.
+  private fun runCheck(args: Array<String>): Int {
+    val compiler =
+      ToolProvider.getSystemJavaCompiler() ?: error("no system Java compiler in this image")
+    var errors = 0
+    val listener = DiagnosticListener<JavaFileObject> { diag ->
+      if (diag.kind == Diagnostic.Kind.ERROR) errors++
+      System.err.println(diag)
+    }
+    compiler.getStandardFileManager(listener, null, null).use { fm ->
+      // Sources are recognized by suffix; everything else on the command line
+      // is an option (values like `-d <dir>` ride along in order).
+      val (sources, options) = args.toList().partition { it.endsWith(".java") }
+      val task =
+        compiler.getTask(null, fm, listener, options, null, fm.getJavaFileObjectsFromStrings(sources))
+      (task as JavacTask).analyze()
+    }
+    return if (errors > 0) 1 else 0
+  }
+
+  // Plain javac passthrough for JVM runs (`elide run`, the app jar) and for
+  // elide's required native-image entrypoint. The shipped CLI is the Rust
+  // binary, which resolves java.home itself and enters via `compile_javac`.
+  @JvmStatic fun main(args: Array<String>) {
+    System.exit(Main.compile(args))
   }
 
   // The host resolves the dist root and passes it as homePath; it is trusted
@@ -35,64 +71,21 @@ object JavacInvoker {
     homePath: CCharPointer,
     argCount: Int,
     argArray: CCharPointerPointer,
+    checkOnly: Boolean,
   ): Int {
     try {
       val home = if (homePath.isNonNull) CTypeConversion.toJavaString(homePath) else null
       if (!home.isNullOrEmpty()) System.setProperty("java.home", home)
+      val args = ArrayList<String>(argCount + 1)
       // Plain loop: capturing a word-typed value (argArray) in a lambda is
       // rejected by native-image ("Expected Object but got Word").
-      val args = ArrayList<String>(argCount)
       for (i in 0 until argCount) args.add(CTypeConversion.toJavaString(argArray.read(i)))
-      return runMainCompile(args.toTypedArray())
+      return runMainCompile(checkOnly, args.toTypedArray())
     } catch (err: Throwable) {
       val bin = if (binPath.isNonNull) CTypeConversion.toJavaString(binPath) else "<unset>"
       System.err.println("madura: javac invocation failed (binPath: $bin)")
       err.printStackTrace()
       return 2
     }
-  }
-
-  // Resolve the dist root from the binary's own absolute path (<root>/bin/madura,
-  // or target/<profile>/madura in the dev tree), mirroring Elide Entry.kt's
-  // binpath resolution, and always prefer the platform image found there.
-  //
-  // Testing `java.home == null` is not sufficient, even though it is unset in
-  // most native images: native-image can bake the *build* machine's java.home
-  // into the image, and on any host where that path happens to exist javac
-  // silently reads a JDK belonging to whoever built the binary rather than the
-  // one shipped beside it. That is how CI compiled against the runner's GraalVM
-  // and then failed on a machine without it.
-  //
-  // The ambient property is honoured only when the binary is not sitting in a
-  // distribution layout at all — running the app jar on a plain JVM, where
-  // java.home is already correct and there is no <root>/lib/modules to prefer.
-  @JvmStatic fun main(args: Array<String>) {
-    val handle = ProcessHandle.current()
-    val info = handle.info()
-    val cmd = info.command().orElse(null)
-    val root = resolveBinPath(cmd)
-
-    // The ambient property is only worth deferring to when it names a real JDK.
-    // In the image it is whatever native-image baked in from the build machine,
-    // which on most hosts is a path that does not exist — and on the builder
-    // itself is a JDK that has nothing to do with this distribution.
-    val ambient = System.getProperty("java.home")?.let { Paths.get(it) }
-    val ambientUsable = ambient != null && Files.isRegularFile(ambient.resolve("lib").resolve("modules"))
-
-    if (root != null) {
-      System.setProperty("java.home", root.toString())
-    } else if (!ambientUsable) {
-      // Report every input: the interesting failures are the ones where this
-      // resolved on the machine that built the binary and not on the one
-      // running it, and a bare NoSuchFileException from inside javac names the
-      // build machine's path without explaining how it was reached.
-      System.err.println("madura: cannot locate the shipped platform image at <root>/lib/modules")
-      System.err.println("  argv0 (ProcessHandle): ${cmd ?: "<unavailable>"}")
-      System.err.println("  ambient java.home:     ${ambient ?: "<unset>"}")
-      System.err.println("  java.vm.name:          ${System.getProperty("java.vm.name") ?: "<unset>"}")
-      System.exit(2)
-      return
-    }
-    System.exit(runMainCompile(args))
   }
 }

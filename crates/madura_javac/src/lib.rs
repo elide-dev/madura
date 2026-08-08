@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 // graal_isolate_t / graal_isolatethread_t are opaque; compile_javac is the
 // image's CEntryPoint (madura-javac.h):
 //   int32_t compile_javac(graal_isolatethread_t*, char* bin, char* home,
-//                         int32_t argc, char** argv);
+//                         int32_t argc, char** argv, bool check_only);
 #[cfg(feature = "native")]
 unsafe extern "C" {
     fn graal_create_isolate(
@@ -26,6 +26,7 @@ unsafe extern "C" {
         home_path: *mut c_char,
         arg_count: c_int,
         arg_array: *mut *mut c_char,
+        check_only: bool,
     ) -> c_int;
 }
 
@@ -177,7 +178,7 @@ fn platform_home(exe: &Path) -> Option<PathBuf> {
 /// The dist root is resolved binary-relative here and handed to the image as
 /// its `java.home`; the image trusts it as-is.
 #[cfg(feature = "native")]
-pub fn invoke<I>(args: I) -> Result<i32, InvokeError>
+pub fn invoke<I>(check_only: bool, args: I) -> Result<i32, InvokeError>
 where
     I: IntoIterator<Item = OsString>,
 {
@@ -192,7 +193,7 @@ where
                 exe: exe.as_deref().map(|p| p.as_os_str().to_owned()),
             })?;
 
-    call(&home, &argv_owned)
+    call(check_only, &home, &argv_owned)
 }
 
 /// Invoke the embedded `javac` against an explicit platform-image root — the
@@ -202,15 +203,15 @@ where
 /// applications embedding the shared library, and the in-process benchmarks,
 /// whose binaries do not sit in a dist layout.
 #[cfg(feature = "native")]
-pub fn invoke_with<I>(home: &Path, args: I) -> Result<i32, InvokeError>
+pub fn invoke_with<I>(check_only: bool, home: &Path, args: I) -> Result<i32, InvokeError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    call(home, &argv(args)?)
+    call(check_only, home, &argv(args)?)
 }
 
 #[cfg(feature = "native")]
-fn call(home: &Path, argv_owned: &[CString]) -> Result<i32, InvokeError> {
+fn call(check_only: bool, home: &Path, argv_owned: &[CString]) -> Result<i32, InvokeError> {
     // Paths on Linux cannot contain NUL, so these conversions cannot fail.
     let bin = std::env::current_exe()
         .ok()
@@ -232,6 +233,7 @@ fn call(home: &Path, argv_owned: &[CString]) -> Result<i32, InvokeError> {
             home.as_ptr().cast_mut(),
             argc,
             arg_ptrs.as_mut_ptr(),
+            check_only,
         )
     })
 }

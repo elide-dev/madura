@@ -80,6 +80,71 @@ fn reports_diagnostics_and_nonzero_exit_on_invalid_java() {
 }
 
 #[test]
+fn check_subcommand_analyzes_without_writing() {
+    let dir = workdir("check-valid");
+    fs::write(
+        dir.join("Hello.java"),
+        "public class Hello { public static void main(String[] a) { System.out.println(\"hi\"); } }",
+    )
+    .unwrap();
+    let out = madura()
+        .current_dir(&dir)
+        .args(["check", "Hello.java", "-d", "out"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(
+        !dir.join("out/Hello.class").exists(),
+        "check mode must not write class files"
+    );
+}
+
+#[test]
+fn check_subcommand_reports_errors() {
+    let dir = workdir("check-invalid");
+    fs::write(
+        dir.join("Broken.java"),
+        "public class Broken { this is not java }",
+    )
+    .unwrap();
+    let out = madura()
+        .current_dir(&dir)
+        .args(["check", "Broken.java"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("error"), "stderr was: {stderr}");
+}
+
+#[test]
+fn compile_subcommand_compiles() {
+    let dir = workdir("compile-subcommand");
+    fs::write(
+        dir.join("Hello.java"),
+        "public class Hello { public static void main(String[] a) { System.out.println(\"hi\"); } }",
+    )
+    .unwrap();
+    let out = madura()
+        .current_dir(&dir)
+        .args(["compile", "Hello.java", "-d", "out"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(dir.join("out/Hello.class").is_file());
+}
+
+#[test]
 fn version_flag_prints_javac_version() {
     let out = madura().arg("--version").output().unwrap();
     assert!(out.status.success());

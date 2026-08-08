@@ -84,6 +84,10 @@ artifacts {
     sources { "main" }
   }
 
+  // Effectively a shared library: the Rust `madura` binary is the CLI and
+  // enters through the `compile_javac` CEntryPoint. The declared entrypoint
+  // exists because elide requires one for native images — `main` is a thin
+  // javac shim nothing ships a launcher for.
   ["native"] = new NativeImage.NativeImage {
     from { "app" }
     entrypoint = entry

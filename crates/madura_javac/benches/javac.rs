@@ -102,8 +102,8 @@ mod inproc {
     }
 
     /// One full in-process invocation, panicking on anything but exit code 0.
-    fn compile(home: &Path, args: &[OsString]) {
-        let code = madura_javac::invoke_with(home, args.iter().cloned())
+    fn compile(check: bool, home: &Path, args: &[OsString]) {
+        let code = madura_javac::invoke_with(check, home, args.iter().cloned())
             .unwrap_or_else(|err| panic!("invocation failed before javac ran: {err}"));
         assert_eq!(code, 0, "javac exited with {code}");
     }
@@ -117,8 +117,19 @@ mod inproc {
         let mut args = smoke_sources();
         args.push(OsString::from("-d"));
         args.push(out.into_os_string());
-        compile(&home, &args); // verify once, outside the measurement
-        bencher.bench(|| compile(black_box(&home), black_box(&args)));
+        compile(false, &home, &args); // verify once, outside the measurement
+        bencher.bench(|| compile(false, black_box(&home), black_box(&args)));
+    }
+
+    /// The same corpus in check mode: all analysis, no code generation. The
+    /// gap to `compile_smoke` is the standing cost of desugaring, codegen and
+    /// class emission.
+    #[divan::bench(sample_count = SAMPLE_COUNT, sample_size = SAMPLE_SIZE)]
+    fn check_smoke(bencher: Bencher) {
+        let home = platform_root();
+        let args = smoke_sources();
+        compile(true, &home, &args);
+        bencher.bench(|| compile(true, black_box(&home), black_box(&args)));
     }
 
     /// `--version` with no compilation: the smallest javac entry there is,
@@ -129,7 +140,7 @@ mod inproc {
     fn version(bencher: Bencher) {
         let home = platform_root();
         let args = [OsString::from("--version")];
-        compile(&home, &args);
-        bencher.bench(|| compile(black_box(&home), black_box(&args)));
+        compile(false, &home, &args);
+        bencher.bench(|| compile(false, black_box(&home), black_box(&args)));
     }
 }
