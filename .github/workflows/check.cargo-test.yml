@@ -1,0 +1,95 @@
+name: "Check - Cargo Test"
+
+# The end-to-end tests in `crates/madura/tests/e2e.rs` spawn the built binary
+# with JAVA_HOME removed and assert it still compiles, so this job needs the
+# real chain: the native image (via `madura_javac`'s build script) and the jlink'd
+# JDK that `madura`'s build script stages `lib/{modules,ct.sym}` out of.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+
+env:
+  CARGO_TERM_COLOR: "always"
+
+permissions:
+  contents: read # to check out code
+
+jobs:
+  test-cargo:
+    name: "Rust Tests"
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read # to check out code
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        if: inputs.hosted != 'nsc'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: "Setup: Checkout (NSC)"
+        if: inputs.hosted == 'nsc'
+        uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: "Setup: Toolchains (mise)"
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          install: true
+          cache: true
+      - name: "Setup: Rust"
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
+        with:
+          # `.cargo/config.toml` enables `-Zbuild-std`, which needs `rust-src`.
+          components: rust-src
+          cache-target: debug
+          bins: cargo-nextest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Setup: Maven Dependencies"
+        working-directory: crates/madura_javac
+        run: elide install --ecosystems maven
+      - name: "Setup: Minimal JDK"
+        run: |
+          set -euo pipefail
+          make target/jdkroot
+          echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
+      - name: "Test: Cargo Nextest"
+        id: testsuite
+        run: cargo nextest run --workspace --all-features --profile ci
+      - name: "Gate"
+        if: steps.testsuite.outcome != 'success'
+        run: exit 1

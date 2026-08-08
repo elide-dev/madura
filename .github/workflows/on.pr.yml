@@ -1,0 +1,129 @@
+name: PR
+
+"on":
+  pull_request:
+    branches-ignore:
+      - renovate/configure
+
+permissions:
+  contents: read # by default, read-only on contents only
+
+concurrency:
+  group: "pr-${{ github.event.number }}"
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: "Triage"
+    runs-on: ${{ vars.RUNNER_DEFAULT || 'ubuntu-latest' }}
+    permissions:
+      contents: "read" # to check out source code
+    outputs:
+      base: ${{ steps.filter.outputs.base }}
+      crates: ${{ steps.filter.outputs.crates }}
+      jvm: ${{ steps.filter.outputs.jvm }}
+      benchmarks: ${{ steps.filter.outputs.benchmarks }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+          sparse-checkout: |
+            .github/triage.yml
+      - name: "Triage: PR Changes"
+        id: filter
+        uses: step-security/paths-filter@5c5241b8233e77b55b9046daf88f1cb7560281de # v4.0.1
+        with:
+          filters: .github/triage.yml
+
+  checks-rustfmt:
+    name: "Check"
+    needs: [triage]
+    if: fromJSON(needs.triage.outputs.crates)
+    uses: ./.github/workflows/check.rustfmt.yml
+    permissions:
+      contents: read # to check out source code
+
+  checks-clippy:
+    name: "Check"
+    needs: [triage]
+    if: fromJSON(needs.triage.outputs.crates)
+    uses: ./.github/workflows/check.clippy.yml
+    permissions:
+      contents: read # to check out source code
+      security-events: write # to write sarif reports
+      actions: read # required for SARIF reporting from private repositories
+    with:
+      # Workspace-wide clippy costs a native-image build; main gets the full run.
+      full: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-clippy') }}
+
+  build:
+    name: "Build"
+    needs: [triage]
+    if: >-
+      !contains(github.event.pull_request.labels.*.name, 'ci:no-build') && (
+        fromJSON(needs.triage.outputs.crates) || fromJSON(needs.triage.outputs.workflows)
+      )
+    uses: ./.github/workflows/job.build.yml
+    permissions:
+      contents: read # to check out source code
+
+  test-cargo:
+    name: "Test"
+    needs: [triage]
+    if: fromJSON(needs.triage.outputs.crates)
+    uses: ./.github/workflows/check.cargo-test.yml
+    permissions:
+      contents: read # to check out source code
+
+  benchmarks:
+    name: "Benchmarks"
+    # Independent of `build`: the macro runner is ARM64, so this job builds its
+    # own `madura` rather than consuming that job's amd64 distribution.
+    needs: [triage]
+    if: >-
+      fromJSON(needs.triage.outputs.benchmarks) &&
+      !contains(github.event.pull_request.labels.*.name, 'ci:no-bench')
+    uses: ./.github/workflows/job.bench.yml
+    permissions:
+      contents: read # to check out source code
+      id-token: write # OpenID Connect authentication with CodSpeed
+
+  gate:
+    name: "Gate"
+    if: always() && github.event.pull_request.draft == false
+    needs: [build, test-cargo, checks-rustfmt, benchmarks]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          BUILD: ${{ needs.build.result }}
+          TESTS: ${{ needs.test-cargo.result }}
+          RUSTFMT: ${{ needs.checks-rustfmt.result }}
+          BENCH: ${{ needs.benchmarks.result }}
+        run: |
+          echo "Build:      $BUILD"
+          echo "Tests:      $TESTS"
+          echo "Rustfmt:    $RUSTFMT"
+          echo "Benchmarks: $BENCH"
+
+          # `skipped` is a pass: triage decided the area was untouched. Only a
+          # job that actually ran and did not succeed fails the gate.
+          status=0
+          for pair in "Build:$BUILD" "Tests:$TESTS" "Rustfmt:$RUSTFMT" "Benchmarks:$BENCH"; do
+            name="${pair%%:*}"
+            result="${pair##*:}"
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "::error::$name job unexpectedly failed on PR"
+              status=1
+            fi
+          done
+          exit "$status"

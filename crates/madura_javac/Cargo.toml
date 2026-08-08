@@ -23,3 +23,9 @@ divan = { package = "codspeed-divan-compat", version = "5.0.1" }
 [[bench]]
 name = "argv"
 harness = false
+
+# Spawns the assembled dist and the JDK's `javac`; measured in walltime mode,
+# so it is built and run separately from `argv` (see job.bench.yml).
+[[bench]]
+name = "compile"
+harness = false

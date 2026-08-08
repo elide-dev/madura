@@ -1,0 +1,151 @@
+name: "Job - Benchmarks"
+
+# Two suites, two measurement modes, one CodSpeed run:
+#
+#   argv     simulation  in-process argv marshalling; nanosecond scale, so it is
+#                        measured on a simulated CPU where runner noise cannot
+#                        reach it.
+#   compile  walltime    spawns the built `madura` and the JDK's `javac` on
+#                        `tests/smoke/simple`. Process startup is the point, and
+#                        a simulated CPU would have to boot a whole JVM under
+#                        instrumentation to measure it.
+#
+# `cargo codspeed build` writes each mode to its own directory, so building each
+# suite under only its own mode is what keeps them apart: the runner invokes
+# `cargo codspeed run` once per mode with `CODSPEED_RUNNER_MODE` set, and each
+# pass collects only the suite built for it.
+#
+# This job builds its own `madura` rather than consuming the distribution from
+# `job.build.yml`. CodSpeed's macro runners — the ones walltime numbers are
+# worth anything on — are 16-core ARM64 bare metal, and `job.build.yml` produces
+# a linux-amd64 dist that would not execute here. Building in place is
+# arch-correct by construction.
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner (walltime data is only stable on codspeed-macro)"
+        required: false
+        default: "codspeed-macro"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner (walltime data is only stable on codspeed-macro)"
+        required: false
+        default: "codspeed-macro"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+
+env:
+  CARGO_TERM_COLOR: "always"
+
+permissions:
+  contents: read # to check out code
+
+jobs:
+  benchmarks:
+    name: "Benchmarks"
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read # to check out code
+      id-token: write # OpenID Connect authentication with CodSpeed
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        if: inputs.hosted != 'nsc'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: "Setup: Checkout (NSC)"
+        if: inputs.hosted == 'nsc'
+        uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: "Setup: Toolchains (mise)"
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          install: true
+          cache: true
+      - name: "Setup: Rust and cargo-codspeed"
+        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
+        with:
+          # `.cargo/config.toml` enables `-Zbuild-std`, which needs `rust-src`.
+          components: rust-src
+          # Macro runners are ARM64; keying the cache on the arch keeps it from
+          # colliding with anything an amd64 job wrote.
+          cache-target: benchmark
+          cache-extra-identifier: ${{ runner.arch }}
+          bins: cargo-codspeed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Setup: Maven Dependencies"
+        working-directory: crates/madura_javac
+        run: elide install --ecosystems maven
+      - name: "Build: madura"
+        # The dev-tree layout is a valid dist root: `target/release/madura` with
+        # `target/lib/{modules,ct.sym}` beside it is exactly the `<root>/bin` +
+        # `<root>/lib` shape the binary resolves against, staged by the build
+        # script. No `make-dist.sh` — its tarballs are not needed here.
+        run: |
+          set -euo pipefail
+          make target/jdkroot
+          MADURA_JAVA_HOME="$PWD/target/jdkroot" cargo build --release -p madura
+      - name: "Setup: Benchmark Inputs"
+        # Both binaries are pinned by absolute path so the benchmark measures the
+        # build from this commit and the openjdk `javac` mise installed — never
+        # whatever else happens to be on PATH.
+        run: |
+          set -euo pipefail
+          madura="$PWD/target/release/madura"
+          javac="$(mise which javac)"
+          test -x "$madura"
+          test -x "$javac"
+          echo "MADURA_BIN=$madura" >> "$GITHUB_ENV"
+          echo "JAVAC_BIN=$javac" >> "$GITHUB_ENV"
+          env -u JAVA_HOME "$madura" --version
+          "$javac" --version
+      - name: "Build: argv (simulation)"
+        # `--no-default-features` drops the `native` feature, so neither suite
+        # relinks the image. `--profile benchmark` keeps unwinding enabled, which
+        # `-Zbuild-std` requires for the benchmark harness.
+        run: >-
+          cargo codspeed build
+          --package madura_javac
+          --no-default-features
+          --profile benchmark
+          --measurement-mode simulation
+          --bench argv
+      - name: "Build: compile (walltime)"
+        run: >-
+          cargo codspeed build
+          --package madura_javac
+          --no-default-features
+          --profile benchmark
+          --measurement-mode walltime
+          --bench compile
+      - name: "Benchmark: CodSpeed"
+        uses: CodSpeedHQ/action@4296e51e7041e24dadb86d1d6e8b9320d223dbe8 # v5.0.3
+        with:
+          mode: simulation,walltime
+          run: cargo codspeed run --package madura_javac

@@ -1,0 +1,41 @@
+# Path filters shared by `on.pr.yml` and `on.push.yml` (step-security/paths-filter).
+# Every top-level key becomes a boolean output on the `triage` job; the anchors
+# compose areas so a change to the build inputs implies the areas built from them.
+
+# Manifests and toolchain pins: a change here can alter any artifact, so these
+# are folded into every other area rather than gating anything on their own.
+base: &base
+  - ".github/triage.yml"
+  - ".cargo/config.toml"
+  - "Cargo.toml"
+  - "Cargo.lock"
+  - "Makefile"
+  - "mise.toml"
+  - "rust-toolchain.toml"
+  - "scripts/**"
+
+# The Kotlin entrypoint and its native-image configuration. Touching any of
+# these rebuilds `madura-javac.so`, which every Rust target links against.
+jvm: &jvm
+  - *base
+  - "crates/madura_javac/src/*.kt"
+  - "crates/madura_javac/elide.pkl"
+  - "crates/madura_javac/native-image/**"
+  - "crates/madura_javac/.dev/elide.lock.v2.bin"
+
+crates: &crates
+  - *base
+  - *jvm
+  - "crates/**/*.rs"
+  - "crates/**/Cargo.toml"
+
+# The benchmarks additionally depend on the corpus they compile, and on the
+# workflow that decides which measurement mode each suite runs under.
+benchmarks: &benchmarks
+  - *crates
+  - "crates/*/benches/**"
+  - "tests/smoke/**"
+  - ".github/workflows/job.bench.yml"
+
+workflows: &workflows
+  - ".github/workflows/**"

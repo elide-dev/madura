@@ -1,0 +1,93 @@
+name: CI
+
+"on":
+  push:
+    branches:
+      - main
+      - stable
+      - release/*
+  # Allows CodSpeed to trigger backtest performance analysis.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read # by default, read-only on contents only
+
+concurrency:
+  group: "push-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: "Triage"
+    runs-on: ${{ vars.RUNNER_DEFAULT || 'ubuntu-latest' }}
+    permissions:
+      contents: "read" # to check out source code
+    outputs:
+      base: ${{ steps.filter.outputs.base }}
+      crates: ${{ steps.filter.outputs.crates }}
+      jvm: ${{ steps.filter.outputs.jvm }}
+      benchmarks: ${{ steps.filter.outputs.benchmarks }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 5
+          submodules: false
+          persist-credentials: false
+          sparse-checkout: |
+            .github/triage.yml
+      - name: "Triage: Push Changes"
+        id: filter
+        uses: step-security/paths-filter@5c5241b8233e77b55b9046daf88f1cb7560281de # v4.0.1
+        with:
+          filters: .github/triage.yml
+
+  checks-rustfmt:
+    name: "Check"
+    needs: [triage]
+    uses: ./.github/workflows/check.rustfmt.yml
+    permissions:
+      contents: read # to check out source code
+
+  checks-clippy:
+    name: "Check"
+    needs: [triage]
+    uses: ./.github/workflows/check.clippy.yml
+    permissions:
+      contents: read # to check out source code
+      security-events: write # to write sarif reports
+      actions: read # required for SARIF reporting from private repositories
+    with:
+      # Main is where the full workspace lint is worth a native-image build.
+      full: true
+
+  build:
+    name: "Build"
+    needs: [triage]
+    uses: ./.github/workflows/job.build.yml
+    permissions:
+      contents: read # to check out source code
+
+  test-cargo:
+    name: "Test"
+    needs: [triage]
+    uses: ./.github/workflows/check.cargo-test.yml
+    permissions:
+      contents: read # to check out source code
+
+  benchmarks:
+    name: "Benchmarks"
+    # Always runs on main: CodSpeed needs an unbroken series on the base branch
+    # for PR comparisons to mean anything. Independent of `build` — the macro
+    # runner is ARM64, so this job builds its own `madura`.
+    needs: [triage]
+    uses: ./.github/workflows/job.bench.yml
+    permissions:
+      contents: read # to check out source code
+      id-token: write # OpenID Connect authentication with CodSpeed
