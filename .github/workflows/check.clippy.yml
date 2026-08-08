@@ -48,8 +48,6 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read # to check out code
-      security-events: write # to write sarif reports
-      actions: read # only required by upload-sarif on a private repository
     steps:
       - name: "Setup: Harden Runner"
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
@@ -86,7 +84,6 @@ jobs:
           # `.cargo/config.toml` enables `-Zbuild-std`, which needs `rust-src`.
           components: clippy, rust-src
           cache-target: debug
-          bins: clippy-sarif, sarif-fmt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Minimal JDK"
@@ -102,18 +99,17 @@ jobs:
           make JLINK="$JAVA_HOME/bin/jlink" target/jdkroot
           echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
       - name: "Analysis: Clippy"
-        continue-on-error: true
+        # Findings fail the job directly. The SARIF upload this used to do needs
+        # Code Security, which is not enabled on this repository — so it turned
+        # the job red on an upload error while `continue-on-error` let the actual
+        # lint findings through. Enabling Code Security is what it would take to
+        # get annotations back; until then `-D warnings` is the gate.
         env:
           FULL: ${{ inputs.full }}
         run: |
           set -euo pipefail
           if [ "$FULL" = "true" ]; then
-            cargo clippy --workspace --all-targets --message-format=json
+            cargo clippy --workspace --all-targets -- -D warnings
           else
-            cargo clippy -p madura_javac --no-default-features --all-targets --message-format=json
-          fi | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
-      - name: "Reporting: SARIF"
-        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
-        with:
-          sarif_file: rust-clippy-results.sarif
-          wait-for-processing: true
+            cargo clippy -p madura_javac --no-default-features --all-targets -- -D warnings
+          fi

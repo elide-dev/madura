@@ -61,8 +61,6 @@ jobs:
     uses: ./.github/workflows/check.clippy.yml
     permissions:
       contents: read # to check out source code
-      security-events: write # to write sarif reports
-      actions: read # required for SARIF reporting from private repositories
     with:
       # Main is where the full workspace lint is worth a native-image build.
       full: true

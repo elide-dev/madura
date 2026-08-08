@@ -59,8 +59,6 @@ jobs:
     uses: ./.github/workflows/check.clippy.yml
     permissions:
       contents: read # to check out source code
-      security-events: write # to write sarif reports
-      actions: read # required for SARIF reporting from private repositories
     with:
       # Workspace-wide clippy costs a native-image build; main gets the full run.
       full: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-clippy') }}
