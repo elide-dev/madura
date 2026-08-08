@@ -18,3 +18,10 @@ repository = "https://github.com/elide-dev/madura"
 [workspace.dependencies]
 getargs = "0.5.0"
 mimalloc = { version = "0.1.52", features = ["v2"] }
+
+# Benchmark profile. Release codegen, but unwinding: `-Zbuild-std` otherwise
+# compiles a second, `panic = "abort"` copy of `core`/`std` for the benchmark
+# harness' dependencies and the two collide with duplicate lang items.
+[profile.benchmark]
+inherits = "release"
+panic = "unwind"
