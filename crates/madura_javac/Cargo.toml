@@ -24,6 +24,13 @@ divan = { package = "codspeed-divan-compat", version = "5.0.1" }
 name = "argv"
 harness = false
 
+# In-process end-to-end compiles through the linked image, run under CodSpeed's
+# simulated CPU — the continuous profile of everything past exec. Needs the
+# `native` feature; without it the harness compiles empty (see javac.rs).
+[[bench]]
+name = "javac"
+harness = false
+
 # Spawns the assembled dist and the JDK's `javac`; measured in walltime mode,
 # so it is built and run separately from `argv` (see job.bench.yml).
 [[bench]]

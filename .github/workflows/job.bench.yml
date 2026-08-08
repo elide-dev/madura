@@ -1,10 +1,14 @@
 name: "Job - Benchmarks"
 
-# Two suites, two measurement modes, one CodSpeed run:
+# Three suites, two measurement modes, one CodSpeed run:
 #
 #   argv     simulation  in-process argv marshalling; nanosecond scale, so it is
 #                        measured on a simulated CPU where runner noise cannot
 #                        reach it.
+#   javac    simulation  in-process end-to-end compile through the linked image:
+#                        marshalling, isolate boot, javac, class emission. The
+#                        continuous CPU profile of everything past exec, with
+#                        flamegraphs to attribute hotspots.
 #   compile  walltime    spawns the built `madura` and the JDK's `javac` on
 #                        `tests/smoke/simple`. Process startup is the point, and
 #                        a simulated CPU would have to boot a whole JVM under
@@ -141,9 +145,10 @@ jobs:
           env -u JAVA_HOME "$madura" --version
           "$javac" --version
       - name: "Build: argv (simulation)"
-        # `--no-default-features` drops the `native` feature, so neither suite
-        # needs elide or the JVM toolchain. `--profile benchmark` keeps unwinding
-        # enabled, which `-Zbuild-std` requires for the benchmark harness.
+        # `--no-default-features` drops the `native` feature, so this suite
+        # needs neither elide nor the JVM toolchain. `--profile benchmark` keeps
+        # unwinding enabled, which `-Zbuild-std` requires for the benchmark
+        # harness.
         run: >-
           cargo codspeed build
           --package madura_javac
@@ -151,6 +156,20 @@ jobs:
           --profile benchmark
           --measurement-mode simulation
           --bench argv
+      - name: "Build: javac (simulation)"
+        # The only suite that links the native image (`native` feature). elide
+        # cannot run on this runner (its arm64 build needs glibc 2.38), so the
+        # image is not built here: `MADURA_JAVAC_SO` points the build script at
+        # the prebuilt shared library shipped inside the dist artifact — built
+        # from this commit, for this runner's arch. At run time the suite
+        # resolves its `java.home` from `target/dist`, extracted above.
+        run: >-
+          MADURA_JAVAC_SO="$PWD/target/dist/lib/libmadura-javac.so"
+          cargo codspeed build
+          --package madura_javac
+          --profile benchmark
+          --measurement-mode simulation
+          --bench javac
       - name: "Build: compile (walltime)"
         run: >-
           cargo codspeed build

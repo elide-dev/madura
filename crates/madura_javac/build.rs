@@ -52,6 +52,22 @@ fn main() {
         return;
     }
 
+    // A prebuilt image can be supplied directly, skipping elide and the
+    // freshness check: CI benchmark runners cannot run `elide` at all (glibc),
+    // and link the shared library shipped inside the dist artifact instead —
+    // built from the same commit, for the same arch.
+    println!("cargo::rerun-if-env-changed=MADURA_JAVAC_SO");
+    if let Some(prebuilt) = env::var_os("MADURA_JAVAC_SO") {
+        let prebuilt = PathBuf::from(prebuilt);
+        assert!(
+            prebuilt.is_file(),
+            "MADURA_JAVAC_SO is not a file: {}",
+            prebuilt.display()
+        );
+        emit_link_directives(&prebuilt, &out_dir);
+        return;
+    }
+
     let so = manifest_dir.join(".dev/artifacts/native-image/madura-javac.so");
 
     if !image_is_current(&manifest_dir, &so) {
@@ -83,14 +99,21 @@ fn main() {
         so.display()
     );
 
-    // The artifact has no `lib` prefix and no SONAME; the renamed copy is the
-    // canonical name for both link time (-l madura-javac) and runtime lookup.
+    emit_link_directives(&so, &out_dir);
+}
+
+/// Stage `so` under its canonical name and emit the link/rpath directives.
+///
+/// The artifact has no `lib` prefix and no SONAME; the renamed copy is the
+/// canonical name for both link time (-l madura-javac) and runtime lookup.
+fn emit_link_directives(so: &Path, out_dir: &Path) {
     let staged = out_dir.join("libmadura-javac.so");
-    fs::copy(&so, &staged).unwrap();
+    fs::copy(so, &staged).unwrap();
 
     println!("cargo::rustc-link-search=native={}", out_dir.display());
     println!("cargo::rustc-link-lib=dylib=madura-javac");
-    // Absolute rpath so this package's own test binaries can load the library.
+    // Absolute rpath so this package's own test and bench binaries can load
+    // the library.
     println!("cargo::rustc-link-arg=-Wl,-rpath,{}", out_dir.display());
     println!("cargo::metadata=lib_dir={}", out_dir.display());
 }
