@@ -59,6 +59,9 @@ kotlin {
       "-Xstring-concat=indy-with-constants"
       "-Xno-call-assertions"
       "-Xno-receiver-assertions"
+      // Required for the CEntryPoint: Intrinsics.checkNotNullParameter takes the
+      // word-typed params as Object, which native-image rejects.
+      "-Xno-param-assertions"
       "-Xlambdas=indy"
       "-Xwhen-expressions=indy"
       "-Xjdk-release=\(jdkTarget)"
@@ -123,6 +126,7 @@ artifacts {
         "-H:AdvancedObfuscation=export-mapping"
         "-H:-UnlockExperimentalVMOptions"
         "-J--enable-native-access=org.graalvm.truffle"
+        "-J--add-exports=jdk.graal.compiler/jdk.graal.compiler.lir.phases=ALL-UNNAMED"
       }
       classInit {
         buildtime {

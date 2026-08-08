@@ -6,5 +6,10 @@ use std::ffi::OsString;
 fn rejects_interior_nul_arguments() {
     let err = madura_javac::invoke([OsString::from("Foo\0.java")])
         .expect_err("interior NUL must be rejected before reaching FFI");
-    assert_eq!(err.arg, OsString::from("Foo\0.java"));
+    match err {
+        madura_javac::InvokeError::NulArg(nul) => {
+            assert_eq!(nul.arg, OsString::from("Foo\0.java"));
+        }
+        other => panic!("expected NulArg, got: {other}"),
+    }
 }
