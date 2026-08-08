@@ -119,7 +119,6 @@ artifacts {
         "-H:ConfigurationFileDirectories=native-image"
         "-H:CStandard=C11"
         "-H:DefaultCharset=UTF-8"
-        "-H:CFI=SW_NONATIVE"
         "-H:AdvancedObfuscation=export-mapping"
         "-H:-UnlockExperimentalVMOptions"
         "-J--enable-native-access=org.graalvm.truffle"
