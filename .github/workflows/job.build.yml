@@ -101,15 +101,15 @@ jobs:
           submodules: false
       - name: "Setup: GraalVM"
         # `elide.pkl` builds the image with `driverMode = "external"`, which needs
-        # a real `native-image` on PATH. `set-java-home: false` is deliberate:
-        # GraalVM supplies only `native-image` here, and JAVA_HOME stays on the
-        # OpenJDK that mise declares, which is what jlink reads below.
-        uses: graalvm/setup-graalvm@5298d94fb55a4f185c602eeac5de1b553882abe2 # v1.6.4
-        with:
-          java-version: "25"
-          distribution: "graalvm"
-          set-java-home: false
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+        # a real `native-image` on PATH. Runs before mise so that mise's shims win
+        # for javac/jlink; JAVA_HOME is deliberately left alone, so GraalVM
+        # contributes `native-image` and nothing else. See the script for why the
+        # 25.2.x line specifically.
+        run: |
+          set -euo pipefail
+          home="$(./scripts/setup-graalvm.sh "${RUNNER_TEMP}/graalvm")"
+          echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
+          echo "$home/bin" >> "$GITHUB_PATH"
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -157,15 +157,31 @@ jobs:
         # Makefile's `?=` leaves an already-set value alone.
         run: make all
       - name: "Test: Smoke Compile"
-        # Proves the uploaded artifact is a working, hermetic compiler: no
-        # JAVA_HOME, run from the dist layout, output actually on disk.
+        # Proves the uploaded artifact is a working, hermetic compiler — with the
+        # builder's GraalVM moved out of the way first.
+        #
+        # Running it in place proves nothing: native-image can freeze the
+        # builder's `java.home` into the image, and javac then reads *that*
+        # lib/modules. On the machine that built the binary those paths exist, so
+        # a smoke test there passes while the artifact is broken for everyone
+        # else. Taking the toolchain away is what makes this test mean something.
         run: |
           set -euo pipefail
           out="${RUNNER_TEMP}/smoke"
           rm -rf "$out"
-          env -u JAVA_HOME ./target/dist/bin/madura tests/smoke/simple/Hello.java -d "$out"
-          test -f "$out/simple/Hello.class"
-          env -u JAVA_HOME ./target/dist/bin/madura --version
+          mv "${RUNNER_TEMP}/graalvm" "${RUNNER_TEMP}/graalvm.hidden"
+          rc=0
+          if ! env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura \
+              tests/smoke/simple/Hello.java -d "$out"; then
+            echo "::error::the distribution cannot compile without the toolchain that built it"
+            rc=1
+          fi
+          test -f "$out/simple/Hello.class" || rc=1
+          env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura --version || rc=1
+          env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura --release 21 \
+            tests/smoke/simple/Hello.java -d "${out}21" || rc=1
+          mv "${RUNNER_TEMP}/graalvm.hidden" "${RUNNER_TEMP}/graalvm"
+          exit "$rc"
       - name: "Test: glibc Floor"
         # The distribution has to run on older hosts than the one that built it —
         # CodSpeed's macro runners are Ubuntu 22.04 (2.35), and that is where the
