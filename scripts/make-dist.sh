@@ -6,6 +6,18 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 profile="${1:-release}"
 dist="$repo/target/dist"
 
+# The distribution carries a platform image and a native shared library, so the
+# tarball is named for the machine that produced it rather than assumed.
+case "$(uname -m)" in
+    x86_64) arch="amd64" ;;
+    aarch64 | arm64) arch="arm64" ;;
+    *)
+        echo "make-dist: unsupported architecture $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+name="madura-linux-$arch"
+
 cargo build \
     --profile "$profile" \
     -p madura
@@ -17,19 +29,20 @@ cp "$repo/target/lib/libmadura-javac.so" "$dist/lib/"
 cp "$repo/target/lib/modules" "$dist/lib/"
 cp "$repo/target/lib/ct.sym" "$dist/lib/"
 
-cp -fr "$repo/target/dist" "$repo/target/madura-linux-amd64"
+rm -rf "$repo/target/${name:?}"
+cp -fr "$repo/target/dist" "$repo/target/$name"
 pushd "$repo/target"
-tar -cf madura-linux-amd64.tar madura-linux-amd64
-gzip --best -k -v madura-linux-amd64.tar
-xz --best --extreme -k -v madura-linux-amd64.tar
+tar -cf "$name.tar" "$name"
+gzip --best -k -v -f "$name.tar"
+xz --best --extreme -k -v -f "$name.tar"
 popd
 
 echo "----------"
 du -h \
-    ./target/dist/lib/modules \
-    ./target/dist/lib/*.so \
-    ./target/dist/bin/madura \
-    ./target/madura-linux-amd64.tar.gz \
-    ./target/madura-linux-amd64.tar.xz
+    "$dist/lib/modules" \
+    "$dist"/lib/*.so \
+    "$dist/bin/madura" \
+    "$repo/target/$name.tar.gz" \
+    "$repo/target/$name.tar.xz"
 
 echo "dist assembled at $dist"

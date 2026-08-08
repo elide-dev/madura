@@ -73,6 +73,20 @@ jobs:
     uses: ./.github/workflows/job.build.yml
     permissions:
       contents: read # to check out source code
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          # The benchmarks consume this leg: CodSpeed's macro runners are ARM64,
+          # and elide cannot run there, so the arm64 distribution has to be built
+          # somewhere with glibc >= 2.38 and shipped in.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    with:
+      runner: ${{ matrix.runner }}
+      arch: ${{ matrix.arch }}
 
   test-cargo:
     name: "Test"
@@ -84,9 +98,8 @@ jobs:
   benchmarks:
     name: "Benchmarks"
     # Always runs on main: CodSpeed needs an unbroken series on the base branch
-    # for PR comparisons to mean anything. Independent of `build` — the macro
-    # runner is ARM64, so this job builds its own `madura`.
-    needs: [triage]
+    # for PR comparisons to mean anything. Consumes the build matrix's arm64 leg.
+    needs: [triage, build]
     uses: ./.github/workflows/job.bench.yml
     permissions:
       contents: read # to check out source code

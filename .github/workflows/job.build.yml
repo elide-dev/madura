@@ -19,6 +19,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      arch:
+        description: "Architecture label (amd64 | arm64); must match the runner"
+        required: false
+        default: "amd64"
+        type: string
       hosted:
         description: "Runner Host"
         required: false
@@ -29,10 +34,10 @@ on:
         required: false
         default: true
         type: boolean
-      artifact_name:
-        description: "Name for the uploaded distribution"
+      glibc_floor:
+        description: "Fail if the built binaries need a newer glibc than this"
         required: false
-        default: "madura-dist"
+        default: "2.35"
         type: string
   workflow_dispatch:
     inputs:
@@ -41,6 +46,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      arch:
+        description: "Architecture label (amd64 | arm64); must match the runner"
+        required: false
+        default: "amd64"
+        type: string
       hosted:
         description: "Runner Host"
         required: false
@@ -51,10 +61,10 @@ on:
         required: false
         default: true
         type: boolean
-      artifact_name:
-        description: "Name for the uploaded distribution"
+      glibc_floor:
+        description: "Fail if the built binaries need a newer glibc than this"
         required: false
-        default: "madura-dist"
+        default: "2.35"
         type: string
 
 env:
@@ -65,7 +75,7 @@ permissions:
 
 jobs:
   build:
-    name: "Distribution (linux-amd64)"
+    name: "Distribution (linux-${{ inputs.arch }})"
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
     permissions:
@@ -104,6 +114,7 @@ jobs:
           # `.cargo/config.toml` turns on `-Zbuild-std`, which needs the std source.
           components: rust-src
           cache-target: release
+          cache-extra-identifier: ${{ inputs.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Verify Toolchains"
@@ -114,10 +125,11 @@ jobs:
           done
           command -v elide >/dev/null && command -v jlink >/dev/null
       - name: "Setup: Maven Dependencies"
-        # Resolved from the committed `.dev/elide.lock.v2.bin`; done up front so a
-        # dependency failure is reported as such rather than inside `build.rs`.
+        # `--fresh` is required, not optional: without it elide resolves offline
+        # against the global m2 cache, which is empty on a fresh runner, and
+        # fails with a bare "Failed to resolve Maven dependencies".
         working-directory: crates/madura_javac
-        run: elide install --ecosystems maven
+        run: elide install --ecosystems maven --fresh
       - name: "Build: Distribution"
         # `make all` is `target/jdkroot` then `target/dist`, in that order — the
         # cargo build reads `MADURA_JAVA_HOME` out of the jlink'd JDK the first
@@ -133,20 +145,43 @@ jobs:
           env -u JAVA_HOME ./target/dist/bin/madura tests/smoke/simple/Hello.java -d "$out"
           test -f "$out/simple/Hello.class"
           env -u JAVA_HOME ./target/dist/bin/madura --version
+      - name: "Test: glibc Floor"
+        # The distribution has to run on older hosts than the one that built it —
+        # CodSpeed's macro runners are Ubuntu 22.04 (2.35), and that is where the
+        # walltime benchmarks execute. A C23-default compiler silently lifts this
+        # floor to 2.38 via `__isoc23_*`, so it is checked rather than assumed.
+        env:
+          FLOOR: ${{ inputs.glibc_floor }}
+        run: |
+          set -euo pipefail
+          rc=0
+          for f in ./target/dist/bin/madura ./target/dist/lib/*.so; do
+            highest="$(objdump -T "$f" \
+              | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
+              | sed 's/GLIBC_//' \
+              | sort -uV \
+              | tail -1)"
+            printf '%-40s needs glibc %s\n' "$(basename "$f")" "$highest"
+            if [ "$(printf '%s\n%s\n' "$FLOOR" "$highest" | sort -V | tail -1)" != "$FLOOR" ]; then
+              echo "::error::$(basename "$f") needs glibc $highest, above the $FLOOR floor"
+              rc=1
+            fi
+          done
+          exit "$rc"
       - name: "Report: Distribution Size"
         run: |
           {
-            echo "### Distribution"
+            echo "### Distribution (linux-${{ inputs.arch }})"
             echo
             echo '```'
-            du -h target/dist/bin/madura target/dist/lib/* target/madura-linux-amd64.tar.* 2>/dev/null
+            du -h target/dist/bin/madura target/dist/lib/* target/madura-linux-*.tar.* 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "Artifact: Distribution"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.artifact_name }}
-          path: target/madura-linux-amd64.tar.gz
+          name: madura-dist-linux-${{ inputs.arch }}
+          path: target/madura-linux-${{ inputs.arch }}.tar.gz
           if-no-files-found: error
           retention-days: 7

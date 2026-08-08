@@ -75,6 +75,20 @@ jobs:
     uses: ./.github/workflows/job.build.yml
     permissions:
       contents: read # to check out source code
+    strategy:
+      fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'ci:no-fail-fast') }}
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          # The benchmarks consume this leg: CodSpeed's macro runners are ARM64,
+          # and elide cannot run there, so the arm64 distribution has to be built
+          # somewhere with glibc >= 2.38 and shipped in.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    with:
+      runner: ${{ matrix.runner }}
+      arch: ${{ matrix.arch }}
 
   test-cargo:
     name: "Test"
@@ -86,10 +100,11 @@ jobs:
 
   benchmarks:
     name: "Benchmarks"
-    # Independent of `build`: the macro runner is ARM64, so this job builds its
-    # own `madura` rather than consuming that job's amd64 distribution.
-    needs: [triage]
+    # Consumes the build matrix's arm64 leg, so it cannot start until that
+    # lands — and it is pointless if the build was skipped or failed.
+    needs: [triage, build]
     if: >-
+      needs.build.result == 'success' &&
       fromJSON(needs.triage.outputs.benchmarks) &&
       !contains(github.event.pull_request.labels.*.name, 'ci:no-bench')
     uses: ./.github/workflows/job.bench.yml
@@ -117,13 +132,13 @@ jobs:
 
           # `skipped` is a pass: triage decided the area was untouched. Only a
           # job that actually ran and did not succeed fails the gate.
-          status=0
+          rc=0
           for pair in "Build:$BUILD" "Tests:$TESTS" "Rustfmt:$RUSTFMT" "Benchmarks:$BENCH"; do
             name="${pair%%:*}"
             result="${pair##*:}"
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "::error::$name job unexpectedly failed on PR"
-              status=1
+              rc=1
             fi
           done
-          exit "$status"
+          exit "$rc"

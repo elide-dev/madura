@@ -80,8 +80,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Maven Dependencies"
+        # `--fresh` is required: without it elide resolves offline against the
+        # global m2 cache, which is empty on a fresh runner.
         working-directory: crates/madura_javac
-        run: elide install --ecosystems maven
+        run: elide install --ecosystems maven --fresh
       - name: "Setup: Minimal JDK"
         run: |
           set -euo pipefail

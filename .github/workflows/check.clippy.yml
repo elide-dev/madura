@@ -85,7 +85,8 @@ jobs:
         if: inputs.full
         run: |
           set -euo pipefail
-          (cd crates/madura_javac && elide install --ecosystems maven)
+          # `--fresh`: elide otherwise resolves offline against an empty m2 cache.
+          (cd crates/madura_javac && elide install --ecosystems maven --fresh)
           make target/jdkroot
           echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
       - name: "Analysis: Clippy"
