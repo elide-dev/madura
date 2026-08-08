@@ -11,6 +11,12 @@ fn main() {
     println!("cargo::rerun-if-changed=elide.pkl");
     println!("cargo::rerun-if-changed=native-image");
 
+    // Without `native` there is nothing to link against, so the JVM toolchain is
+    // not needed: the pure-Rust layer (and its benchmarks) build on their own.
+    if env::var_os("CARGO_FEATURE_NATIVE").is_none() {
+        return;
+    }
+
     // Run from the crate dir, NOT via `-p` from elsewhere: native-image resolves
     // its output dir against the process cwd and aborts otherwise (found in Task 2).
     // elide's cache misses ConfigurationFileDirectories contents; see elide-dev/WHIPLASH#1416

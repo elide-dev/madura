@@ -7,5 +7,19 @@ edition = "2024"
 links = "madura-javac"
 build = "build.rs"
 
+[features]
+default = ["native"]
+# Build and link the `madura-javac` native image. Turning this off leaves only
+# the pure-Rust argument marshalling layer, which needs no JVM toolchain — that
+# is what the benchmarks are built against.
+native = []
+
 [dependencies]
 # None yet.
+
+[dev-dependencies]
+divan = { package = "codspeed-divan-compat", version = "5.0.1" }
+
+[[bench]]
+name = "argv"
+harness = false

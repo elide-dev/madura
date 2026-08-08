@@ -1,3 +1,5 @@
+#![cfg(feature = "native")]
+
 use std::ffi::OsString;
 
 #[test]
