@@ -130,7 +130,9 @@ jobs:
           tar -xzf "${RUNNER_TEMP}"/dist-artifact/madura-linux-*.tar.gz -C target
           mv target/madura-linux-* target/dist
           madura="$PWD/target/dist/bin/madura"
-          javac="$(mise which javac)"
+          # From JAVA_HOME, not `mise which`: the latter needs an active config
+          # and errors out when the tool is merely installed.
+          javac="$JAVA_HOME/bin/javac"
           test -x "$madura"
           test -x "$javac"
           echo "MADURA_BIN=$madura" >> "$GITHUB_ENV"

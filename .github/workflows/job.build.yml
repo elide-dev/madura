@@ -99,6 +99,17 @@ jobs:
         with:
           fetch-depth: 1
           submodules: false
+      - name: "Setup: GraalVM"
+        # `elide.pkl` builds the image with `driverMode = "external"`, which needs
+        # a real `native-image` on PATH. `set-java-home: false` is deliberate:
+        # GraalVM supplies only `native-image` here, and JAVA_HOME stays on the
+        # OpenJDK that mise declares, which is what jlink reads below.
+        uses: graalvm/setup-graalvm@5298d94fb55a4f185c602eeac5de1b553882abe2 # v1.6.4
+        with:
+          java-version: "25"
+          distribution: "graalvm"
+          set-java-home: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -118,12 +129,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Verify Toolchains"
+        # The platform image madura ships is whatever jlink emits, so the JDK
+        # behind it is pinned to JAVA_HOME rather than left to PATH order —
+        # GraalVM is on PATH here too and would otherwise be a coin flip.
         run: |
           set -euo pipefail
-          for tool in elide jlink javac cargo; do
-            printf '%-8s %s\n' "$tool" "$(command -v "$tool" || echo 'MISSING')"
+          for tool in elide native-image cargo; do
+            printf '%-14s %s\n' "$tool" "$(command -v "$tool" || echo 'MISSING')"
           done
-          command -v elide >/dev/null && command -v jlink >/dev/null
+          printf '%-14s %s\n' "JAVA_HOME" "$JAVA_HOME"
+          printf '%-14s %s\n' "GRAALVM_HOME" "${GRAALVM_HOME:-<unset>}"
+          command -v elide >/dev/null
+          command -v native-image >/dev/null
+          test -x "$JAVA_HOME/bin/jlink"
+          grep -E '^(IMPLEMENTOR|JAVA_VERSION)=' "$JAVA_HOME/release" || true
+          echo "JLINK=$JAVA_HOME/bin/jlink" >> "$GITHUB_ENV"
       - name: "Setup: Maven Dependencies"
         # `--fresh` is required, not optional: without it elide resolves offline
         # against the global m2 cache, which is empty on a fresh runner, and
@@ -133,7 +153,8 @@ jobs:
       - name: "Build: Distribution"
         # `make all` is `target/jdkroot` then `target/dist`, in that order — the
         # cargo build reads `MADURA_JAVA_HOME` out of the jlink'd JDK the first
-        # target produces.
+        # target produces. `JLINK` comes from the environment above; the
+        # Makefile's `?=` leaves an already-set value alone.
         run: make all
       - name: "Test: Smoke Compile"
         # Proves the uploaded artifact is a working, hermetic compiler: no

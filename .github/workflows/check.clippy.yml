@@ -62,6 +62,16 @@ jobs:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
+      - name: "Setup: GraalVM"
+        # Supplies `native-image` for elide's external driver only; JAVA_HOME
+        # stays on the OpenJDK mise declares, which is what jlink reads.
+        if: inputs.full
+        uses: graalvm/setup-graalvm@5298d94fb55a4f185c602eeac5de1b553882abe2 # v1.6.4
+        with:
+          java-version: "25"
+          distribution: "graalvm"
+          set-java-home: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Toolchains (mise)"
         if: inputs.full
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
@@ -87,7 +97,9 @@ jobs:
           set -euo pipefail
           # `--fresh`: elide otherwise resolves offline against an empty m2 cache.
           (cd crates/madura_javac && elide install --ecosystems maven --fresh)
-          make target/jdkroot
+          # jlink pinned to JAVA_HOME: GraalVM is on PATH too, and the platform
+          # image must come from the declared JDK.
+          make JLINK="$JAVA_HOME/bin/jlink" target/jdkroot
           echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
       - name: "Analysis: Clippy"
         continue-on-error: true
