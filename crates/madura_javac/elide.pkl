@@ -90,6 +90,7 @@ artifacts {
       optimization = "2"
 
       flags {
+        "-march=compatibility"
         "--shared"
         "--gc=\(gc)"
         "--emit=build-report"
