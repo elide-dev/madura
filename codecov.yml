@@ -1,0 +1,35 @@
+# Codecov configuration. Coverage is Rust-only: the Kotlin entrypoint compiles
+# into `madura-javac.so`, which no Rust instrumentation can see through, so the
+# measured surface is the CLI, the marshalling layer, and the FFI shim.
+
+coverage:
+  precision: 2
+  round: down
+  range: "60...90"
+
+  status:
+    project:
+      default:
+        # A drop this small is usually a refactor moving lines around, not a
+        # test regression; larger drops are worth a look.
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        # New code should carry tests, but a patch that is mostly comments or
+        # `#[cfg]`-gated FFI declarations should not block a merge.
+        threshold: 5%
+        informational: true
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: true
+
+ignore:
+  # Build scripts run at build time, not under test.
+  - "crates/*/build.rs"
+  # Benchmarks are measurement harnesses; they carry no shipped logic.
+  - "crates/*/benches/**"
+  # Test sources themselves.
+  - "crates/*/tests/**"

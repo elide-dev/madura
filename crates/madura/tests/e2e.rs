@@ -17,6 +17,24 @@ fn workdir(name: &str) -> PathBuf {
     dir
 }
 
+/// A file in the shared smoke corpus at `<workspace>/tests/smoke`, which the
+/// CI distribution smoke test and the in-process benchmarks also compile. The
+/// corpus is the single place a new case has to be added to reach all three.
+fn smoke(relative: &str) -> PathBuf {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crate is nested two levels under the workspace root")
+        .join("tests/smoke")
+        .join(relative);
+    assert!(
+        path.is_file(),
+        "missing smoke corpus file: {}",
+        path.display()
+    );
+    path
+}
+
 #[test]
 fn compiles_valid_java_to_class_file() {
     let dir = workdir("valid");
@@ -150,4 +168,114 @@ fn version_flag_prints_javac_version() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("javac"), "stdout was: {stdout}");
+}
+
+// --- Shared smoke corpus -------------------------------------------------
+//
+// The cases below run the corpus at `<workspace>/tests/smoke` through every
+// mode. `job.build.yml` runs the same files against the assembled
+// distribution, so a case added there is covered in both places.
+
+#[test]
+fn smoke_corpus_compiles_and_checks() {
+    let dir = workdir("smoke-simple");
+    let source = smoke("simple/Hello.java");
+
+    // Compile mode writes the class file, under its package directory.
+    let out = madura()
+        .current_dir(&dir)
+        .arg("compile")
+        .arg(&source)
+        .args(["-d", "out"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(dir.join("out/simple/Hello.class").is_file());
+
+    // Check mode accepts the same source and writes nothing.
+    let out = madura()
+        .current_dir(&dir)
+        .arg("check")
+        .arg(&source)
+        .args(["-d", "check-out"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(
+        !dir.join("check-out").exists(),
+        "check mode must not write output"
+    );
+}
+
+#[test]
+fn smoke_corpus_broken_source_fails_check() {
+    let dir = workdir("smoke-broken-check");
+    let out = madura()
+        .current_dir(&dir)
+        .arg("check")
+        .arg(smoke("broken/Sample.java"))
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "check must reject the broken corpus; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("error"), "stderr was: {stderr}");
+}
+
+#[test]
+fn smoke_corpus_broken_source_fails_compile() {
+    let dir = workdir("smoke-broken-compile");
+    let out = madura()
+        .current_dir(&dir)
+        .arg("compile")
+        .arg(smoke("broken/Sample.java"))
+        .args(["-d", "out"])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "compile must reject the broken corpus; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("error"), "stderr was: {stderr}");
+    assert!(
+        !dir.join("out/some/pkg/here/Example.class").exists(),
+        "a failed compile must not leave a class file behind"
+    );
+}
+
+// Passthrough: no leading subcommand, so the corpus source is javac's own
+// first argument — the mode the binary uses when it stands in for `javac`.
+#[test]
+fn smoke_corpus_passthrough_compiles() {
+    let dir = workdir("smoke-passthrough");
+    let out = madura()
+        .current_dir(&dir)
+        .arg(smoke("simple/Hello.java"))
+        .args(["-d", "out"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(dir.join("out/simple/Hello.class").is_file());
 }

@@ -13,6 +13,7 @@ base: &base
   - "mise.toml"
   - "rust-toolchain.toml"
   - "scripts/**"
+  - "codecov.yml"
 
 # The Kotlin entrypoint and its native-image configuration. Touching any of
 # these rebuilds `madura-javac.so`, which every Rust target links against.
@@ -23,18 +24,21 @@ jvm: &jvm
   - "crates/madura_javac/native-image/**"
   - "crates/madura_javac/.dev/elide.lock.v2.bin"
 
+# `tests/smoke/**` belongs here, not only under benchmarks: the end-to-end
+# tests compile that corpus through every mode, so a case added to it changes
+# what the test suite asserts.
 crates: &crates
   - *base
   - *jvm
   - "crates/**/*.rs"
   - "crates/**/Cargo.toml"
+  - "tests/smoke/**"
 
-# The benchmarks additionally depend on the corpus they compile, and on the
-# workflow that decides which measurement mode each suite runs under.
+# The benchmarks additionally depend on the corpus they compile (via *crates),
+# and on the workflow that decides which measurement mode each suite runs under.
 benchmarks: &benchmarks
   - *crates
   - "crates/*/benches/**"
-  - "tests/smoke/**"
   - ".github/workflows/job.bench.yml"
 
 workflows: &workflows

@@ -92,6 +92,8 @@ jobs:
     uses: ./.github/workflows/check.cargo-test.yml
     permissions:
       contents: read # to check out source code
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   benchmarks:
     name: "Benchmarks"

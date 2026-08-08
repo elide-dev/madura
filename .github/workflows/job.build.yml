@@ -171,15 +171,52 @@ jobs:
           rm -rf "$out"
           mv "${RUNNER_TEMP}/graalvm" "${RUNNER_TEMP}/graalvm.hidden"
           rc=0
-          if ! env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura \
-              tests/smoke/simple/Hello.java -d "$out"; then
+
+          # Every invocation runs without the toolchain that built the binary.
+          madura() { env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura "$@"; }
+
+          # `expect <code> <label> -- <args...>`: run madura, compare exit codes.
+          # `|| got=$?` both keeps a nonzero exit from tripping `set -e` — several
+          # cases here expect failure — and preserves the real status. Do not
+          # rewrite this as `if ! madura ...; then got=$?; fi`: inside that branch
+          # `$?` is the negation's status (always 0), so every case would pass.
+          expect() {
+            local want="$1" label="$2" got=0; shift 3
+            madura "$@" || got=$?
+            if [ "$got" != "$want" ]; then
+              echo "::error::$label: expected exit $want, got $got"
+              rc=1
+            fi
+          }
+
+          # Passthrough (no subcommand) — the `javac` stand-in path.
+          if ! madura tests/smoke/simple/Hello.java -d "$out/passthrough"; then
             echo "::error::the distribution cannot compile without the toolchain that built it"
             rc=1
           fi
-          test -f "$out/simple/Hello.class" || rc=1
-          env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura --version || rc=1
-          env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura --release 21 \
-            tests/smoke/simple/Hello.java -d "${out}21" || rc=1
+          test -f "$out/passthrough/simple/Hello.class" || rc=1
+
+          # compile: writes class files. check: analyzes and writes nothing.
+          expect 0 "compile accepts valid source" -- \
+            compile tests/smoke/simple/Hello.java -d "$out/compile"
+          test -f "$out/compile/simple/Hello.class" || rc=1
+
+          expect 0 "check accepts valid source" -- \
+            check tests/smoke/simple/Hello.java -d "$out/check"
+          if [ -e "$out/check" ]; then
+            echo "::error::check mode wrote output to $out/check"
+            rc=1
+          fi
+
+          # The broken corpus must be rejected by both modes.
+          expect 1 "check rejects broken source" -- \
+            check tests/smoke/broken/Sample.java
+          expect 1 "compile rejects broken source" -- \
+            compile tests/smoke/broken/Sample.java -d "$out/broken"
+
+          madura --version || rc=1
+          madura --release 21 tests/smoke/simple/Hello.java -d "${out}21" || rc=1
+
           mv "${RUNNER_TEMP}/graalvm.hidden" "${RUNNER_TEMP}/graalvm"
           exit "$rc"
       - name: "Test: glibc Floor"
