@@ -5,7 +5,7 @@ build-std = ["std", "core", "alloc", "proc_macro", "panic_abort"]
 build-std-features = ["compiler-builtins-mem"]
 
 [profile.release]
-opt-level = "s"
+opt-level = 3
 lto = "fat"
 panic = "abort"
 incremental = false

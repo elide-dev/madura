@@ -3,3 +3,4 @@ aube = "latest"
 bun = "latest"
 "github:elide-dev/elide" = "latest"
 hk = "latest"
+java = { version = "openjdk-25", install_env = { JAVA_TOOL_OPTIONS = "--enable-native-access=ALL-UNNAMED" } }

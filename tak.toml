@@ -1,0 +1,4 @@
+[bench.help]
+cmd = ["./target/dist/bin/madura", "-help"]
+runs = 10
+

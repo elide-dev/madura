@@ -7,8 +7,9 @@ name = "madura-javac"
 
 local jdkTarget = 25
 local kotlinTarget = "2.4"
+local kotlinVersion = "2.4.0"
 local truffleTarget = "25.2.4"
-local gc = "serial"
+local gc = "G1"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
 
@@ -20,6 +21,9 @@ jvm {
     compiler {
       flags {
         "-Xlint:all"
+        // Fix: Module path is not properly assembled for Kotlin, and kotlinc rejects modules without listing stdlib,
+        // even when passing `-no-stdlib`.
+        "--module-path=.dev/dependencies/m2/org/jetbrains/kotlin/kotlin-stdlib/\(kotlinVersion)/kotlin-stdlib-\(kotlinVersion).jar"
       }
     }
   }
@@ -66,6 +70,7 @@ sources {
   ["main"] = new Sources.SourceSetSpec {
     paths {
       "src/*.kt"
+      "src/*.java"
     }
   }
 }
@@ -73,7 +78,7 @@ sources {
 dependencies {
   maven {
     packages {
-      "org.graalvm.truffle:truffle-api:\(truffleTarget)"
+      "org.jetbrains.kotlin:kotlin-stdlib:\(kotlinVersion)"
     }
   }
 }
@@ -91,7 +96,7 @@ artifacts {
 
     options {
       driverMode = "external"
-      optimization = "s"
+      optimization = "2"
 
       flags {
         "--shared"

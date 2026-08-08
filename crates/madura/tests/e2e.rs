@@ -64,7 +64,11 @@ fn compiles_for_older_release_via_ct_sym() {
 #[test]
 fn reports_diagnostics_and_nonzero_exit_on_invalid_java() {
     let dir = workdir("invalid");
-    fs::write(dir.join("Broken.java"), "public class Broken { this is not java }").unwrap();
+    fs::write(
+        dir.join("Broken.java"),
+        "public class Broken { this is not java }",
+    )
+    .unwrap();
     let out = madura()
         .current_dir(&dir)
         .arg("Broken.java")
