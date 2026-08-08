@@ -123,7 +123,12 @@ artifacts {
         "-H:ConfigurationFileDirectories=native-image"
         "-H:CStandard=C11"
         "-H:DefaultCharset=UTF-8"
-        "-H:AdvancedObfuscation=export-mapping"
+        // Full symbols, no obfuscation: the CodSpeed `javac` suite profiles
+        // this exact artifact, and a flamegraph ends at the library border
+        // unless every method keeps its name. `-g` adds DWARF (file:line
+        // attribution); DeleteLocalSymbols would otherwise strip the symtab.
+        "-g"
+        "-H:-DeleteLocalSymbols"
         "-H:-UnlockExperimentalVMOptions"
         "-J--enable-native-access=org.graalvm.truffle"
         "-J--add-exports=jdk.graal.compiler/jdk.graal.compiler.lir.phases=ALL-UNNAMED"

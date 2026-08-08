@@ -110,6 +110,21 @@ fn emit_link_directives(so: &Path, out_dir: &Path) {
     let staged = out_dir.join("libmadura-javac.so");
     fs::copy(so, &staged).unwrap();
 
+    // DWARF rides in a `.gnu_debuglink` sidecar named after the *original*
+    // artifact; debuggers and profilers look it up in the loaded library's own
+    // directory, so staging it beside the copy gives perf/valgrind line-level
+    // frames. The dist ships without one — absence is normal.
+    let debug_name = format!(
+        "{}.debug",
+        so.file_name()
+            .expect("artifact has a name")
+            .to_string_lossy()
+    );
+    let debug = so.with_file_name(&debug_name);
+    if debug.is_file() {
+        fs::copy(&debug, out_dir.join(&debug_name)).unwrap();
+    }
+
     println!("cargo::rustc-link-search=native={}", out_dir.display());
     println!("cargo::rustc-link-lib=dylib=madura-javac");
     // Absolute rpath so this package's own test and bench binaries can load
