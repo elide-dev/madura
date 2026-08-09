@@ -102,7 +102,7 @@ jobs:
           echo "$vanilla/bin" >> "$GITHUB_PATH"
       - name: "Setup: Maven Dependencies"
         working-directory: crates/madura_javac
-        run: elide install --ecosystems maven
+        run: elide install --ecosystems maven --fresh
       - name: "Build: Minimal JDK"
         run: |
           set -euo pipefail
