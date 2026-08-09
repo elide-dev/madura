@@ -82,6 +82,17 @@ sources {
   }
 }
 
+testing {
+  coverage {
+    jvm {
+      reports {
+        Jvm.htmlReport()
+        Jvm.xmlReport()
+      }
+    }
+  }
+}
+
 artifacts {
   ["app"] = new Jvm.Jar {
     name = "app"

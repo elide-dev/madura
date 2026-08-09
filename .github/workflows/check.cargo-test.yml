@@ -124,12 +124,8 @@ jobs:
           set -euo pipefail
           make JLINK="$JAVA_HOME/bin/jlink" target/jdkroot
           echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
-      - name: "Test: Cargo Nextest"
+      - name: "Test: Rust"
         id: testsuite
-        if: ${{ !inputs.coverage }}
-        run: cargo nextest run --workspace --all-features --profile ci
-      - name: "Test: Cargo Nextest (coverage)"
-        id: testsuite-coverage
         if: ${{ inputs.coverage }}
         # Same run as above, instrumented. A test failure must still fail the
         # job, so the report is written even on failure and the outcome is
@@ -144,7 +140,7 @@ jobs:
       - name: "Report: Coverage Summary"
         # Runs even when the tests failed: partial coverage of a failing run is
         # still worth seeing in the job summary.
-        if: ${{ inputs.coverage && always() && steps.testsuite-coverage.conclusion != 'skipped' }}
+        if: ${{ inputs.coverage && always() && steps.testsuite.conclusion != 'skipped' }}
         run: |
           {
             echo "### Coverage"
@@ -168,7 +164,6 @@ jobs:
         # it this gate would simply be skipped.
         if: >-
           always() && (
-            steps.testsuite.outcome == 'failure' ||
-            steps.testsuite-coverage.outcome == 'failure'
+            steps.testsuite.outcome == 'failure'
           )
         run: exit 1

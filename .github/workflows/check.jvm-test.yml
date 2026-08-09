@@ -1,0 +1,133 @@
+name: "Check - JVM Test"
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+      coverage:
+        description: "Measure coverage and upload it to Codecov"
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      CODECOV_TOKEN:
+        description: "Codecov upload token; required because the repo is not public"
+        required: false
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      hosted:
+        description: "Runner Host"
+        required: false
+        default: ""
+        type: string
+      coverage:
+        description: "Measure coverage and upload it to Codecov"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: "always"
+
+permissions:
+  contents: read # to check out code
+
+jobs:
+  test-jvm:
+    name: "JVM Tests"
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read # to check out code
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        if: inputs.hosted != 'nsc'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: "Setup: Checkout (NSC)"
+        if: inputs.hosted == 'nsc'
+        uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: "Setup: Java (Vanilla)"
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        id: java-vanilla
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: "Setup: Java (GVM)"
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        id: java-gvm
+        with:
+          distribution: graalvm
+          java-version: '25'
+          set-default: false
+      - name: "Setup: Toolchains (mise)"
+        uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          install: true
+          cache: true
+      - name: "Setup: Environment"
+        run: |
+          set -euo pipefail
+          home="${{ steps.java-gvm.outputs.path }}"
+          vanilla="${{ steps.java-vanilla.outputs.path }}"
+          echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
+          echo "VANILLA_HOME=$vanilla" >> "$GITHUB_ENV"
+          echo "$vanilla/bin" >> "$GITHUB_PATH"
+      - name: "Setup: Maven Dependencies"
+        working-directory: crates/madura_javac
+        run: elide install --ecosystems maven
+      - name: "Build: Minimal JDK"
+        run: |
+          set -euo pipefail
+          make JLINK="$VANILLA_HOME/bin/jlink" target/jdkroot
+          echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
+      - name: "Test: JVM"
+        id: testsuite
+        if: ${{ !inputs.coverage }}
+        working-directory: crates/madura_javac
+        run: elide test --coverage
+      - name: "Report: Upload to Codecov"
+        if: ${{ inputs.coverage && always() && hashFiles('lcov.info') != '' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: crates/madura_javac/.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml
+          # The repo is internal, so tokenless upload is not an option.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          flags: jvm
+      - name: "Gate"
+        # `always()` so a failing test run still reaches this step: the report
+        # and upload steps above deliberately run after a failure, and without
+        # it this gate would simply be skipped.
+        if: >-
+          always() && (
+            steps.testsuite.outcome == 'failure'
+          )
+        run: exit 1
