@@ -2,14 +2,19 @@ name: "Job - Build"
 
 # Builds the whole chain in one job, because each stage is an input to the next:
 #
-#   elide build  ->  app.jar + madura-javac.so   (GraalVM native image)
+#   elide build  ->  app.jar + madura-javac.{so,dylib}  (GraalVM native image)
 #   jlink        ->  target/jdkroot              (java.base,java.compiler,jdk.compiler)
-#   cargo build  ->  target/release/madura       (links the .so, stages lib/)
+#   cargo build  ->  target/release/madura       (links the library, stages lib/)
 #   make-dist.sh ->  target/dist/{bin,lib}       (hermetic, plus tarballs)
 #
 # The tarball is what gets uploaded: `actions/upload-artifact` zips its input and
 # drops the executable bit, so shipping `target/dist` directly would produce a
 # non-executable launcher on the other side.
+#
+# `os` must match the runner, and matches what `make-dist.sh` derives from
+# `uname -s` — that is the name in every tarball and artifact this job produces.
+# Two steps are ELF-specific and are skipped off Linux: the glibc floor check,
+# and harden-runner (which only instruments Ubuntu runners).
 
 on:
   workflow_call:
@@ -18,6 +23,11 @@ on:
         description: "Runner"
         required: false
         default: "ubuntu-latest"
+        type: string
+      os:
+        description: "Operating system label (linux | darwin); must match the runner"
+        required: false
+        default: "linux"
         type: string
       arch:
         description: "Architecture label (amd64 | arm64); must match the runner"
@@ -50,6 +60,11 @@ on:
         description: "Runner"
         required: false
         default: "ubuntu-latest"
+        type: string
+      os:
+        description: "Operating system label (linux | darwin); must match the runner"
+        required: false
+        default: "linux"
         type: string
       arch:
         description: "Architecture label (amd64 | arm64); must match the runner"
@@ -85,13 +100,17 @@ permissions:
 
 jobs:
   build:
-    name: "Distribution (linux-${{ inputs.arch }})"
+    name: "Distribution (${{ inputs.os }}-${{ inputs.arch }})"
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
     permissions:
       contents: read # to check out code
     steps:
       - name: "Setup: Harden Runner"
+        # harden-runner instruments Ubuntu runners only; it cannot enforce an
+        # egress policy on macOS, so the darwin leg skips it rather than
+        # carrying a step that silently does nothing.
+        if: runner.os == 'Linux'
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
         with:
           disable-sudo: true
@@ -135,7 +154,9 @@ jobs:
           # `.cargo/config.toml` turns on `-Zbuild-std`, which needs the std source.
           components: rust-src
           cache-target: release
-          cache-extra-identifier: ${{ inputs.arch }}
+          # Both dimensions: the cache holds a linked, platform-specific
+          # target dir, so linux-arm64 and darwin-arm64 must not share one.
+          cache-extra-identifier: ${{ inputs.os }}-${{ inputs.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Verify Toolchains"
@@ -234,6 +255,10 @@ jobs:
         # CodSpeed's macro runners are Ubuntu 22.04 (2.35), and that is where the
         # walltime benchmarks execute. A C23-default compiler silently lifts this
         # floor to 2.38 via `__isoc23_*`, so it is checked rather than assumed.
+        #
+        # Nothing to check on Mach-O: there is no glibc, and the deployment
+        # target is what bounds compatibility there instead.
+        if: runner.os == 'Linux'
         env:
           FLOOR: ${{ inputs.glibc_floor }}
         run: |
@@ -255,25 +280,27 @@ jobs:
       - name: "Test: Smoke"
         run: bun test
       - name: "Report: Distribution Size"
+        env:
+          TARGET: ${{ inputs.os }}-${{ inputs.arch }}
         run: |
           {
-            echo "### Distribution (linux-${{ inputs.arch }})"
+            echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/dist/bin/madura target/dist/lib/* target/madura-linux-*.tar.* 2>/dev/null
+            du -h target/dist/bin/madura target/dist/lib/* "target/madura-$TARGET".tar.* 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "Artifact: Distribution"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: madura-dist-linux-${{ inputs.arch }}
+          name: madura-dist-${{ inputs.os }}-${{ inputs.arch }}
           # Both compressions ship as release assets. The benchmark job globs
           # `*.tar.gz` out of this same artifact, so adding `.tar.xz` alongside
           # it is additive; the uncompressed `.tar` is deliberately left behind.
           path: |
-            target/madura-linux-${{ inputs.arch }}.tar.gz
-            target/madura-linux-${{ inputs.arch }}.tar.xz
+            target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.gz
+            target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.xz
           if-no-files-found: error
           retention-days: 7
       - name: "Report: Smoke Tests → Codecov"

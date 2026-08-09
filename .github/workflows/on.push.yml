@@ -75,15 +75,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
+          - os: linux
+            arch: amd64
             runner: ubuntu-latest
           # The benchmarks consume this leg: CodSpeed's macro runners are ARM64,
           # and elide cannot run there, so the arm64 distribution has to be built
           # somewhere with glibc >= 2.38 and shipped in.
-          - arch: arm64
+          - os: linux
+            arch: arm64
             runner: ubuntu-24.04-arm
+          # Apple silicon only: the 25.2.x GraalVM line publishes no macos-x64
+          # archive on GDS, so Intel macOS has no builder. `macos-15` is pinned
+          # rather than `macos-latest`, which floats to the next image.
+          - os: darwin
+            arch: arm64
+            runner: macos-15
     with:
       runner: ${{ matrix.runner }}
+      os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
 
   test-cargo:
