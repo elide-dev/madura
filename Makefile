@@ -37,8 +37,8 @@ rebuild-gifs:
 	@echo "Rebuilding gifs..."
 	$(RULE)asciinema \
 		rec ./madura-check.cast \
-		--cols 80 \
-		--rows 40 \
+		--cols 90 \
+		--rows 20 \
 		--overwrite \
 		-c "hyperfine --shell=none --warmup=10 --runs=25 -n 'javac ...' '/usr/lib/jvm/gvm.jdk25/bin/javac -d target ./tests/smoke/simple/Hello.java' -n 'madura check ...' './target/dist/bin/madura check ./tests/smoke/simple/Hello.java' && sleep 2"
 	$(RULE)agg madura-check.cast ./docs/check.gif
