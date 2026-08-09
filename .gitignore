@@ -7,4 +7,4 @@
 !.dev/elide.lock.v2.bin
 node_modules/
 .mise/
-.testreport.xml
+.smoke.testreport.xml

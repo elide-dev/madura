@@ -3,4 +3,4 @@ concurrent = true
 rerunEach = 3
 
 [test.reporter]
-junit = ".testreport.xml"
+junit = ".smoke.testreport.xml"

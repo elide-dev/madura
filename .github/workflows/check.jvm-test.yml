@@ -112,8 +112,12 @@ jobs:
         id: testsuite
         working-directory: crates/madura_javac
         run: elide test --coverage
-      - name: "Report: Upload to Codecov"
-        if: ${{ inputs.coverage && always() && hashFiles('lcov.info') != '' }}
+      - name: "Report: Coverage → Codecov"
+        # The JaCoCo report `elide.pkl` asks for. There is no test-results
+        # upload beside it: `elide test` emits coverage only, no JUnit XML.
+        if: >-
+          ${{ inputs.coverage && always()
+          && hashFiles('crates/madura_javac/.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml') != '' }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: crates/madura_javac/.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml

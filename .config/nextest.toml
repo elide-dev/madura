@@ -3,3 +3,8 @@ experimental = ["benchmarks"]
 [profile.ci]
 # Run all tests regardless of failures.
 fail-fast = false
+
+# Written to the profile's store directory, so this lands at
+# `target/nextest/ci/.native.testreport.xml`.
+[profile.ci.junit]
+path = ".native.testreport.xml"

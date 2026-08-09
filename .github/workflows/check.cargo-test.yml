@@ -32,6 +32,11 @@ on:
         required: false
         default: true
         type: boolean
+      reports:
+        description: "Send reports to Codecov"
+        required: false
+        default: true
+        type: boolean
     secrets:
       CODECOV_TOKEN:
         description: "Codecov upload token; required because the repo is not public"
@@ -50,6 +55,11 @@ on:
         type: string
       coverage:
         description: "Measure coverage and upload it to Codecov"
+        required: false
+        default: true
+        type: boolean
+      reports:
+        description: "Send reports to Codecov"
         required: false
         default: true
         type: boolean
@@ -158,6 +168,20 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: rust
+      - name: "Report: Tests → Codecov"
+        # nextest writes JUnit into its profile store directory, not the repo
+        # root; the path here has to match `.config/nextest.toml`.
+        if: >-
+          ${{ inputs.reports && always()
+          && hashFiles('target/nextest/ci/.native.testreport.xml') != '' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./target/nextest/ci/.native.testreport.xml
+          # The repo is internal, so tokenless upload is not an option.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          flags: rust
+          report_type: test_results
       - name: "Gate"
         # `always()` so a failing test run still reaches this step: the report
         # and upload steps above deliberately run after a failure, and without
