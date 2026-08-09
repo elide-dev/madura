@@ -33,15 +33,15 @@ clean:  ## Clean built targets.
 target:
 	$(RULE)mkdir target
 
-rebuild-gifs:
+rebuild-gifs:  ## Rebuild gifs for repo/docs.
 	@echo "Rebuilding gifs..."
 	$(RULE)asciinema \
 		rec ./madura-check.cast \
-		--cols 90 \
-		--rows 20 \
+		--cols 80 \
+		--rows 24 \
 		--overwrite \
 		-c "hyperfine --shell=none --warmup=10 --runs=25 -n 'javac ...' '/usr/lib/jvm/gvm.jdk25/bin/javac -d target ./tests/smoke/simple/Hello.java' -n 'madura check ...' './target/dist/bin/madura check ./tests/smoke/simple/Hello.java' && sleep 2"
-	$(RULE)agg madura-check.cast ./docs/check.gif
+	$(RULE)agg --font-size 18 --speed 1.5 madura-check.cast ./docs/check.gif
 	$(RULE)rm -fv madura-check.cast
 	@echo "Gifs regenerated."
 
