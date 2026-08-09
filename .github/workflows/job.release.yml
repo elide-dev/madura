@@ -4,10 +4,20 @@ name: "Job - Release"
 #
 #   release-please  maintains a Release PR on `main` from conventional commits,
 #                   bumping `[workspace.package] version` (both crates inherit
-#                   it) and CHANGELOG.md. Merging that PR tags the release and
-#                   creates an empty GitHub Release.
-#   assets          fills that release with the per-platform tarballs the build
-#                   matrix already produced in *this same workflow run*.
+#                   it) and CHANGELOG.md. Merging that PR creates a *draft*
+#                   GitHub Release.
+#   assets          fills that draft with the per-platform tarballs the build
+#                   matrix already produced in *this same workflow run*, then
+#                   publishes it.
+#
+# The draft matters: with immutable releases enabled, a published release
+# rejects asset uploads outright ("HTTP 422: Cannot upload assets to an
+# immutable release"), which is exactly how v1.0.1 shipped with none. GitHub's
+# own guidance is to create the release as a draft, attach everything, and
+# publish last — immutability is applied at publish. That ordering is also
+# strictly better without immutability: a failed upload leaves an unpublished
+# draft rather than a published release advertising binaries that do not
+# exist. `draft: true` in release-please-config.json is the other half of this.
 #
 # The second half consumes artifacts rather than rebuilding: the caller runs the
 # build matrix first and passes its result in, so a release ships exactly the
@@ -140,10 +150,29 @@ jobs:
           ( cd release-assets && sha256sum -- * > SHA256SUMS )
           ls -la release-assets
       - name: "Release: Upload Assets"
+        # The release is still a draft here, so this succeeds even with
+        # immutable releases enabled.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: gh release upload "$TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+      - name: "Release: Publish"
+        # Publishing is the last step and the point of no return: it creates the
+        # git tag and, under immutable releases, freezes the assets. Guarded on
+        # isDraft so a re-run against an already-published release is a no-op
+        # rather than an error (a published immutable release accepts edits to
+        # nothing but its title and notes).
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
+            echo "published $TAG"
+          else
+            echo "$TAG is already published; nothing to do"
+          fi
       - name: "Report: Release Summary"
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
