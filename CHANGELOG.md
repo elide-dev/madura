@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/elide-dev/madura/compare/v1.0.0...v1.0.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* **ci:** let release-please tag the merged release PR ([3975092](https://github.com/elide-dev/madura/commit/3975092aa9d56d178a089bb1b2f6870160a7ddfd))
+
 ## [1.0.0](https://github.com/elide-dev/madura/compare/v1.0.0...v1.0.0) (2026-08-09)
 
 
