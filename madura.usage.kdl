@@ -1,24 +1,38 @@
 // optional metadata
 name "Madura"
 bin "madura"
-about "fast jvm toolchain"
+about "fast java compiler + checker"
 version "1.0.0"
 author "nobody"
 license "MIT"
 
 // standard flags
-flag "-f --force"   help="Always do the thing"
-flag "-v --version" help="Print the CLI version"
-flag "-h --help"    help="Print the CLI help"
+flag "-v --version" help="Print version"
+flag "-h --help"    help="Print help"
 
-// top-level util commands
-cmd "version" help="Print the CLI version"
-cmd "help" help="Print the CLI help"
-
-// java compiler
-cmd "javac" help="compile java sources" {
-  before_long_help "Usage: madura javac <options> <source files>"
+// checker
+cmd "check" help="check sources without generating" {
+  before_long_help "Usage: madura check <options> <source files>"
   long_help "Java: 25.0.3" #"""
+    Behavior: Identical to `javac`, but without codegen.
+    - `madura check -d target ./some/java/Source.java`
+
+    Accepts identical flags as `madura compile` (or javac). Flags listed below
+    augment javac's flags. See `madura compile --help` for compile flags.
+  """#
+
+  flag "--keep-going" help="Do not abort after first error"
+}
+
+// compiler
+cmd "compile" help="compile java sources" {
+  alias "javac"
+  before_long_help "Usage: madura compile <options> <source files>"
+  long_help "Java: 25.0.3" #"""
+    Behavior: Identical to `javac`. All three of the following are equivalent:
+    - `madura compile -d target ./some/java/Source.java`
+    - `madura -d target ./some/java/Source.java` (drop-in form, identical to javac)
+
     @<filename>                  Read options and filenames from file
     -Akey[=value]                Options to pass to annotation processors
     --add-modules <module>(,<module>)*
