@@ -11,7 +11,7 @@ An experiment, called `madura`, which provides a hermetic, minimalist Java compi
 - **`madura` can compile Java code identically to `javac`**, because it _is_ `javac`.
 - **`madura` can quickly check Java code,** and it is never wrong, because it _is just `javac`_.
 - **`madura` is very smol,** making it suitable for Git hooks, CI, agentic code-gen, and so on.
-- **`madura` supports up to JDK25,**, so it works drop-in for most projects.
+- **`madura` supports up to JDK25,** so it works drop-in for most projects.
 
 See **_Architecture_** below for full details.
 

@@ -110,7 +110,6 @@ jobs:
           echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
       - name: "Test: JVM"
         id: testsuite
-        if: ${{ !inputs.coverage }}
         working-directory: crates/madura_javac
         run: elide test --coverage
       - name: "Report: Upload to Codecov"

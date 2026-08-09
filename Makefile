@@ -72,11 +72,10 @@ crates/madura_javac/.dev/artifacts/jar/app/app.jar crates/madura_javac/.dev/arti
 	@echo "+ Building javac image..."
 	$(RULE)cd crates/madura_javac && $(ELIDE) build --no-cache --release
 
-target/jdkroot: target crates/madura_javac/.dev/artifacts/jar/app/app.jar
+target/jdkroot: target
 	@echo "+ Building minimal JDK..."
 	$(RULE)rm -fr target/jdkroot
 	$(RULE)$(JLINK) \
-		--module-path ./crates/madura_javac/.dev/artifacts/jar/app/app.jar \
 		--add-modules java.base \
 		--add-modules java.compiler \
 		--add-modules jdk.compiler \
