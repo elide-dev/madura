@@ -55,6 +55,23 @@ madura check -d target ./some/java/Code.java
 ```
 > Madura is designed to pass arguments to a regular `javac` invocation by default. `madura compile` is an explicit alias for this.
 
+## Testing Regime
+
+To make absolutely sure that `madura` behaves as expected, there are several layers of testing:
+
+- **Unit Testing**
+  - JVM-side tests guarantee the contract established by the thin Kotlin shared-lib
+  - Rust-side tests guarantee unit behavior and shared-library usage
+- **E2E Testing**
+  - Rust E2E tests guarantee expected shared-library behavior in a native context
+- **Smoke**
+  - For each smoke test, a reference JVM bytecode class is built using normal `javac` from OpenJDK
+  - Then, `madura check` is run, and expected outputs are checked
+  - Then, `madura compile` is run, expected outputs are checked, and bytecode is compared
+  - Tests only pass if bytecode is _byte-identical_ to what `javac` would produce
+- **TCK**
+  - `madura` then runs against relevant upstream tests via [`testsuite`](https://github.com/elide-dev/testsuite).
+
 ## Architecture
 
 **(1) A minimal OpenJDK image is prepared via `jlink`.**
