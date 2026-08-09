@@ -5,7 +5,8 @@
 
 An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from Rust and JDK internals only.
 
-> [!WARNING] This is unstable software.
+> [!WARNING]
+> This is unstable software.
 
 ## Why
 
