@@ -19,8 +19,11 @@ all: target/jdkroot target/dist
 
 build: target/dist
 
-test:
-	$(BUN) test
+test: build
+	@echo "Running madura tests..."
+	$(RULE)cd crates/madura_javac && $(ELIDE) test
+	$(RULE)$(CARGO) nextest run
+	$(RULE)#$(BUN) test
 
 clean:
 	$(RULE)$(CARGO) clean

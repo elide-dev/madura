@@ -75,6 +75,11 @@ sources {
       "src/*.kt"
     }
   }
+  ["test"] = new Sources.SourceSetSpec {
+    paths {
+      "tests/*.kt"
+    }
+  }
 }
 
 artifacts {
