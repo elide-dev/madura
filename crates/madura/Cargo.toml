@@ -2,8 +2,8 @@ cargo-features = ["trim-paths"]
 
 [package]
 name = "madura"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 madura_javac = { path = "../madura_javac" }

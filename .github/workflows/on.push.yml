@@ -104,3 +104,15 @@ jobs:
     permissions:
       contents: read # to check out source code
       id-token: write # OpenID Connect authentication with CodSpeed
+
+  release:
+    name: "Release"
+    # Main only, and only behind a green build: merging the release PR is what
+    # cuts a release, and the assets job attaches the tarballs this very run
+    # produced — so the build matrix has to have finished successfully first.
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && needs.build.result == 'success'
+    uses: ./.github/workflows/job.release.yml
+    permissions:
+      contents: write # to tag, release, and upload assets
+      pull-requests: write # to open and update the release PR
