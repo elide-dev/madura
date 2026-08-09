@@ -1,0 +1,6 @@
+[test]
+concurrent = true
+rerunEach = 3
+
+[test.reporter]
+junit = ".testreport.xml"

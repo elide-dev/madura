@@ -1,3 +1,4 @@
+// madura: fail
 package some.pkg.here;
 
 public final class Example {
