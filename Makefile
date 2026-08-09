@@ -33,6 +33,18 @@ clean:
 target:
 	$(RULE)mkdir target
 
+rebuild-gifs:
+	@echo "Rebuilding gifs..."
+	$(RULE)asciinema \
+		rec ./madura-check.cast \
+		--cols 80 \
+		--rows 40 \
+		--overwrite \
+		-c "hyperfine --shell=none --warmup=10 --runs=25 -n 'javac ...' '/usr/lib/jvm/gvm.jdk25/bin/javac -d target ./tests/smoke/simple/Hello.java' -n 'madura check ...' './target/dist/bin/madura check ./tests/smoke/simple/Hello.java' && sleep 2"
+	$(RULE)agg madura-check.cast ./docs/check.gif
+	$(RULE)rm -fv madura-check.cast
+	@echo "Gifs regenerated."
+
 MADURA_SRCS := $(wildcard crates/madura/src/*.rs) crates/madura/build.rs \
 	$(wildcard crates/madura_javac/src/*.rs) crates/madura_javac/build.rs \
 	scripts/make-dist.sh Cargo.toml Cargo.lock
