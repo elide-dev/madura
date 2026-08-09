@@ -17,15 +17,15 @@ ELIDE ?= $(shell which elide)
 
 all: target/jdkroot target/dist
 
-build: target/dist
+build: target/dist  ## Build all targets.
 
-test: build
+test: build  ## Run all tests.
 	@echo "Running madura tests..."
 	$(RULE)cd crates/madura_javac && $(ELIDE) test
 	$(RULE)$(CARGO) nextest run
 	$(RULE)$(BUN) test
 
-clean:
+clean:  ## Clean built targets.
 	$(RULE)$(CARGO) clean
 	$(RULE)rm -fr target crates/madura_javac/.dev/artifacts
 	@echo "Cleaned."
@@ -56,6 +56,8 @@ target/dist: target/jdkroot crates/madura_javac/.dev/artifacts/jar/app/app.jar $
 	$(RULE)MADURA_JAVA_HOME=$(PROJECT_ROOT)/target/jdkroot $(CARGO) build --release
 	$(RULE)./scripts/make-dist.sh
 
+deps: node_modules/ crates/madura_javac/.dev/dependencies  ## Install dependencies.
+
 node_modules/:
 	@echo "+ Installing NPM dependencies..."
 	$(RULE)$(AUBE) install
@@ -68,9 +70,14 @@ JAVAC_IMAGE_SRCS := $(wildcard crates/madura_javac/src/*.kt) \
 	crates/madura_javac/elide.pkl \
 	$(wildcard crates/madura_javac/native-image/*)
 
+image: crates/madura_javac/.dev/artifacts/native-image  ## Build the shared-library native image.
+
 crates/madura_javac/.dev/artifacts/jar/app/app.jar crates/madura_javac/.dev/artifacts/native-image: $(JAVAC_IMAGE_SRCS)
 	@echo "+ Building javac image..."
 	$(RULE)cd crates/madura_javac && $(ELIDE) build --no-cache --release
+
+
+jdkroot: target/jdkroot  ## Build the minimal jlink'd OpenJDK.
 
 target/jdkroot: target
 	@echo "+ Building minimal JDK..."
@@ -84,4 +91,10 @@ target/jdkroot: target
 		--no-man-pages \
 		--output target/jdkroot
 
-.PHONY: clean
+help: ## Show this help message.
+	@echo "madura:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-28s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+
+.PHONY: clean help
+
