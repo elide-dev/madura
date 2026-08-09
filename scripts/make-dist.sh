@@ -16,7 +16,15 @@ case "$(uname -m)" in
         exit 1
         ;;
 esac
-name="madura-linux-$arch"
+case "$(uname -s)" in
+    Linux) os="linux" libext="so" ;;
+    Darwin) os="darwin" libext="dylib" ;;
+    *)
+        echo "make-dist: unsupported operating system $(uname -s)" >&2
+        exit 1
+        ;;
+esac
+name="madura-$os-$arch"
 
 cargo build \
     --profile "$profile" \
@@ -25,7 +33,7 @@ cargo build \
 rm -rf "$dist"
 mkdir -p "$dist/bin" "$dist/lib"
 cp "$repo/target/$profile/madura" "$dist/bin/madura"
-cp "$repo/target/lib/libmadura-javac.so" "$dist/lib/"
+cp "$repo/target/lib/libmadura-javac.$libext" "$dist/lib/"
 cp "$repo/target/lib/modules" "$dist/lib/"
 cp "$repo/target/lib/ct.sym" "$dist/lib/"
 
@@ -40,7 +48,7 @@ popd
 echo "----------"
 du -h \
     "$dist/lib/modules" \
-    "$dist"/lib/*.so \
+    "$dist"/lib/*."$libext" \
     "$dist/bin/madura" \
     "$repo/target/$name.tar.gz" \
     "$repo/target/$name.tar.xz"

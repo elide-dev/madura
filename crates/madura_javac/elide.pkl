@@ -157,6 +157,8 @@ artifacts {
         buildtime {
           "sun.nio.fs.LinuxFileSystem"
           "sun.nio.fs.LinuxFileSystemProvider"
+          "sun.nio.fs.MacOSXFileSystem"
+          "sun.nio.fs.MacOSXFileSystemProvider"
         }
       }
     }
