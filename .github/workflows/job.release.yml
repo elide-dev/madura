@@ -18,6 +18,16 @@ name: "Job - Release"
 # Cargo.lock is deliberately not bumped by release-please: it has no updater
 # that survives a virtual manifest, and nothing here builds with `--locked`, so
 # cargo refreshes the two path members on the next build.
+#
+# Do NOT add `package-name` to release-please-config.json (the schema forbids
+# comments, so the warning lives here). With `include-component-in-tag: false`
+# the release branch carries no component, but release-please's
+# getBranchComponent() ignores that flag and falls back to the package name.
+# The mismatch is silent and one-way: the release PR opens and merges fine,
+# then the release is skipped with "PR component: undefined does not match
+# configured component", leaving the PR stuck on `autorelease: pending` and
+# this workflow's assets job skipped. `component: ""` does not help either —
+# it is falsy, so the same fallback fires.
 
 on:
   workflow_call:
