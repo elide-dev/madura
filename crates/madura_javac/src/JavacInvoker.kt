@@ -56,11 +56,15 @@ object JavacInvoker {
     return if (errors > 0) 1 else 0
   }
 
+  fun compileMain(args: Array<String>): Int {
+    return Main.compile(args)
+  }
+
   // Plain javac passthrough for JVM runs (`elide run`, the app jar) and for
   // elide's required native-image entrypoint. The shipped CLI is the Rust
   // binary, which resolves java.home itself and enters via `compile_javac`.
   @JvmStatic fun main(args: Array<String>) {
-    System.exit(Main.compile(args))
+    System.exit(compileMain(args))
   }
 
   // The host resolves the dist root and passes it as homePath; it is trusted

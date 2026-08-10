@@ -8,9 +8,16 @@ An experiment, called `madura`, which provides a hermetic, minimalist Java compi
 > [!WARNING]
 > This is unstable software.
 
+- **`madura` can compile Java code identically to `javac`**, because it _is_ `javac`.
+- **`madura` can quickly check Java code,** and it is never wrong, because it _is just `javac`_.
+- **`madura` is very smol,** making it suitable for Git hooks, CI, agentic code-gen, and so on.
+- **`madura` supports up to JDK25,** so it works drop-in for most projects.
+
+See **_Architecture_** below for full details.
+
 ## Why
 
-In some circumstances, you just want to check your Java code, like a typechecker would in Python or TypeScript. A good example of this is agentic engineering: code is generated often, and to keep codegen sane, many full compile cycles are needed.
+**In some circumstances, you just want to check your Java code, like a typechecker would in Python or TypeScript.** A good example of this is agentic engineering: code is generated often, and to keep codegen sane, many full compile cycles are needed.
 
 This tool takes a different approach: it's just native `javac`. Optionally, one can omit the codegen step by running `madura check` instead of `madura compile`, which allows hyper-fast checking of your Java code without extra fuss.
 
@@ -29,15 +36,7 @@ tbd
 
 `madura` is a hermetic native command line tool, and so requires no JDK or `JAVA_HOME` to use. It is self-contained and supports up to **JDK 25** at this time.
 
-**Compile Java**
-
-```diff
-- javac -d target ./some/java/Code.java
-+ madura -d target ./some/java/Code.java
-```
-> Madura is designed to pass arguments to a regular `javac` invocation by default. `madura compile` is an explicit alias for this.
-
-**Check Java**
+#### Check Java
 
 ```
 # it's `madura check`
@@ -48,3 +47,45 @@ madura check -d target ./some/java/Code.java
 ```
 > Madura's `check` step is still just `javac`, but without the codegen step.
 
+#### Compile Java
+
+```diff
+- javac -d target ./some/java/Code.java
++ madura -d target ./some/java/Code.java
+```
+> Madura is designed to pass arguments to a regular `javac` invocation by default. `madura compile` is an explicit alias for this.
+
+## Testing Regime
+
+To make absolutely sure that `madura` behaves as expected, there are several layers of testing:
+
+- **Unit Testing**
+  - JVM-side tests guarantee the contract established by the thin Kotlin shared-lib
+  - Rust-side tests guarantee unit behavior and shared-library usage
+- **E2E Testing**
+  - Rust E2E tests guarantee expected shared-library behavior in a native context
+- **Smoke**
+  - For each smoke test, a reference JVM bytecode class is built using normal `javac` from OpenJDK
+  - Then, `madura check` is run, and expected outputs are checked
+  - Then, `madura compile` is run, expected outputs are checked, and bytecode is compared
+  - Tests only pass if bytecode is _byte-identical_ to what `javac` would produce
+- **TCK**
+  - `madura` then runs against relevant upstream tests via [`testsuite`](https://github.com/elide-dev/testsuite).
+
+## Architecture
+
+**(1) A minimal OpenJDK image is prepared via `jlink`.**
+
+The minimal image is designed to (effectively) build `$JAVA_HOME/lib/modules` in a way that doesn't bloat your toolchain. Specific modules can be shipped without including e.g. Native Image, GraalVM's SDK modules, and so on, which most users don't need.
+
+**(2) GraalVM `native-image` is used to build a shared library which implements `javac`.**
+
+The Java compiler is built as `libmadura.so`, and then FFI'd into the Cargo build, where it can be used in Rust.
+
+**(3) Minimalist Rust command line wrapping the shared-lib.**
+
+The entrypoint is built via [`crates/madura`](crates/madura). The CLI entrypoint loads the shared-library, checks/prepares arguments via zero-overhead calls, and then invokes check/compile routines.
+
+**(4) JDK APIs ship with the dist.**
+
+To enable the packaged `javac` to understand release APIs, `lib/modules` and `ct.sym` ship in the distribution. Thus, no `JAVA_HOME` is required at all to run Madura.

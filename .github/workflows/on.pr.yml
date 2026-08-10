@@ -98,6 +98,16 @@ jobs:
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
+  test-jvm:
+    name: "Test"
+    needs: [triage]
+    if: fromJSON(needs.triage.outputs.crates)
+    uses: ./.github/workflows/check.jvm-test.yml
+    permissions:
+      contents: read # to check out source code
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   benchmarks:
     name: "Benchmarks"
     # Consumes the build matrix's arm64 leg, so it cannot start until that

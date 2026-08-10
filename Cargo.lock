@@ -277,7 +277,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "madura"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "madura_javac",
  "mimalloc",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "madura_javac"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "codspeed-divan-compat",
 ]

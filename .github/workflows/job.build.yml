@@ -34,6 +34,11 @@ on:
         required: false
         default: true
         type: boolean
+      reports:
+        description: "Produce/upload reports"
+        required: false
+        default: true
+        type: boolean
       glibc_floor:
         description: "Fail if the built binaries need a newer glibc than this"
         required: false
@@ -58,6 +63,11 @@ on:
         type: string
       artifact:
         description: "Upload the assembled distribution"
+        required: false
+        default: true
+        type: boolean
+      reports:
+        description: "Produce/upload reports"
         required: false
         default: true
         type: boolean
@@ -242,6 +252,8 @@ jobs:
             fi
           done
           exit "$rc"
+      - name: "Test: Smoke"
+        run: bun test
       - name: "Report: Distribution Size"
         run: |
           {
@@ -264,3 +276,16 @@ jobs:
             target/madura-linux-${{ inputs.arch }}.tar.xz
           if-no-files-found: error
           retention-days: 7
+      - name: "Report: Smoke Tests → Codecov"
+        # `bunfig.toml` names this file; it lands in the working directory.
+        if: ${{ inputs.reports && always() && hashFiles('.smoke.testreport.xml') != '' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./.smoke.testreport.xml
+          # The repo is internal, so tokenless upload is not an option.
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          # Its own flag: this suite exercises the assembled distribution
+          # end-to-end, not the Rust unit tests uploaded under `rust`.
+          flags: smoke
+          report_type: test_results

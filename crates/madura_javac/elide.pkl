@@ -75,6 +75,22 @@ sources {
       "src/*.kt"
     }
   }
+  ["test"] = new Sources.SourceSetSpec {
+    paths {
+      "tests/*.kt"
+    }
+  }
+}
+
+testing {
+  coverage {
+    jvm {
+      reports {
+        Jvm.htmlReport()
+        Jvm.xmlReport()
+      }
+    }
+  }
 }
 
 artifacts {
