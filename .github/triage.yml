@@ -6,43 +6,23 @@
 # are folded into every other area rather than gating anything on their own.
 base: &base
   - ".github/triage.yml"
-  - ".cargo/config.toml"
-  - "Cargo.toml"
-  - "Cargo.lock"
   - "Makefile"
   - "mise.toml"
-  - "rust-toolchain.toml"
   - "scripts/**"
   - "codecov.yml"
   - "release-please-config.json"
   - ".release-please-manifest.json"
 
-# The Kotlin entrypoint and its native-image configuration. Touching any of
-# these rebuilds `madura-javac.{so,dylib}`, which every Rust target links
-# against.
+# The Kotlin entrypoint, its native-image configuration, and the tests that
+# exercise the assembled binary. Touching any of these rebuilds `madura` or
+# changes what its test suites assert.
 jvm: &jvm
   - *base
-  - "crates/madura_javac/src/*.kt"
-  - "crates/madura_javac/elide.pkl"
-  - "crates/madura_javac/native-image/**"
-  - "crates/madura_javac/.dev/elide.lock.v2.bin"
-
-# `tests/smoke/**` belongs here, not only under benchmarks: the end-to-end
-# tests compile that corpus through every mode, so a case added to it changes
-# what the test suite asserts.
-crates: &crates
-  - *base
-  - *jvm
-  - "crates/**/*.rs"
-  - "crates/**/Cargo.toml"
-  - "tests/smoke/**"
-
-# The benchmarks additionally depend on the corpus they compile (via *crates),
-# and on the workflow that decides which measurement mode each suite runs under.
-benchmarks: &benchmarks
-  - *crates
-  - "crates/*/benches/**"
-  - ".github/workflows/job.bench.yml"
+  - "src/*.kt"
+  - "elide.pkl"
+  - "native-image/**"
+  - ".dev/elide.lock.v2.bin"
+  - "tests/**"
 
 workflows: &workflows
   - ".github/workflows/**"

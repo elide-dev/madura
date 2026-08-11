@@ -100,12 +100,14 @@ artifacts {
     sources { "main" }
   }
 
-  // Effectively a shared library: the Rust `madura` binary is the CLI and
-  // enters through the `compile_javac` CEntryPoint. The declared entrypoint
-  // exists because elide requires one for native images — `main` is a thin
-  // javac shim nothing ships a launcher for.
+  // The shipped CLI: native-image builds `madura` as an executable whose
+  // `main` (dev.elide.jvm.JavacInvoker) parses the `check`/`compile`/drop-in
+  // modes and drives javac. Platform metadata is read from `$JAVA_HOME` at
+  // runtime, so the binary ships alone.
   ["native"] = new NativeImage.NativeImage {
     from { "app" }
+    name = "madura"
+    type = "binary"
     entrypoint = entry
 
     options {
@@ -114,7 +116,6 @@ artifacts {
 
       flags {
         "-march=compatibility"
-        "--shared"
         "--gc=\(gc)"
         "--emit=build-report"
         "--exact-reachability-metadata"
@@ -143,10 +144,9 @@ artifacts {
         "-H:ConfigurationFileDirectories=native-image"
         "-H:CStandard=C11"
         "-H:DefaultCharset=UTF-8"
-        // Full symbols, no obfuscation: the CodSpeed `javac` suite profiles
-        // this exact artifact, and a flamegraph ends at the library border
-        // unless every method keeps its name. `-g` adds DWARF (file:line
-        // attribution); DeleteLocalSymbols would otherwise strip the symtab.
+        // Full symbols, no obfuscation: profilers and a flamegraph need every
+        // method to keep its name. `-g` adds DWARF (file:line attribution);
+        // DeleteLocalSymbols would otherwise strip the symtab.
         "-g"
         "-H:-DeleteLocalSymbols"
         "-H:-UnlockExperimentalVMOptions"

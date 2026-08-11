@@ -3,9 +3,8 @@ name: "Job - Release"
 # Release automation, in two halves:
 #
 #   release-please  maintains a Release PR on `main` from conventional commits,
-#                   bumping `[workspace.package] version` (both crates inherit
-#                   it) and CHANGELOG.md. Merging that PR creates a *draft*
-#                   GitHub Release.
+#                   bumping the version in package.json and CHANGELOG.md.
+#                   Merging that PR creates a *draft* GitHub Release.
 #   assets          fills that draft with the per-platform tarballs the build
 #                   matrix already produced in *this same workflow run*, then
 #                   publishes it.
@@ -24,10 +23,6 @@ name: "Job - Release"
 # binaries that were smoke-tested and glibc-checked, and nothing is compiled
 # twice. That is also why this runs from `on.push.yml` rather than on a
 # `release: published` trigger — by then the run holding the artifacts is over.
-#
-# Cargo.lock is deliberately not bumped by release-please: it has no updater
-# that survives a virtual manifest, and nothing here builds with `--locked`, so
-# cargo refreshes the two path members on the next build.
 #
 # Do NOT add `package-name` to release-please-config.json (the schema forbids
 # comments, so the warning lives here). With `include-component-in-tag: false`

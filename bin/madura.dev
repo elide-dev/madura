@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-export ACTIVE_PROFILE="debug"
 export PROJECT_ROOT="$PWD"
-export ARTIFACTS_BIN="$PROJECT_ROOT/target/$ACTIVE_PROFILE"
-export PATH="$ARTIFACTS_BIN:$PATH"
-exec "$ARTIFACTS_BIN/madura" "$@"
+exec "$PROJECT_ROOT/.dev/artifacts/native-image/madura" "$@"

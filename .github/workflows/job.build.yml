@@ -1,15 +1,18 @@
 name: "Job - Build"
 
-# Builds the whole chain in one job, because each stage is an input to the next:
+# Builds the distribution in one job:
 #
-#   elide build  ->  app.jar + madura-javac.{so,dylib}  (GraalVM native image)
-#   jlink        ->  target/jdkroot              (java.base,java.compiler,jdk.compiler)
-#   cargo build  ->  target/release/madura       (links the library, stages lib/)
-#   make-dist.sh ->  target/dist/{bin,lib}       (hermetic, plus tarballs)
+#   elide build  ->  .dev/artifacts/native-image/madura   (GraalVM native image)
+#   make-dist.sh ->  target/dist/bin/madura + tarballs
+#
+# The native image IS the CLI: its `main` (dev.elide.jvm.JavacInvoker) parses
+# the check/compile/drop-in modes and drives javac. Platform metadata
+# (lib/modules, lib/ct.sym) is read from the runtime `$JAVA_HOME`, so the
+# distribution is a single binary with no sidecar.
 #
 # The tarball is what gets uploaded: `actions/upload-artifact` zips its input and
-# drops the executable bit, so shipping `target/dist` directly would produce a
-# non-executable launcher on the other side.
+# drops the executable bit, so shipping the binary directly would produce a
+# non-executable file on the other side.
 #
 # `os` must match the runner, and matches what `make-dist.sh` derives from
 # `uname -s` — that is the name in every tarball and artifact this job produces.
@@ -50,10 +53,14 @@ on:
         default: true
         type: boolean
       glibc_floor:
-        description: "Fail if the built binaries need a newer glibc than this"
+        description: "Fail if the built binary needs a newer glibc than this"
         required: false
         default: "2.35"
         type: string
+    secrets:
+      CODECOV_TOKEN:
+        description: "Codecov upload token; required because the repo is not public"
+        required: false
   workflow_dispatch:
     inputs:
       runner:
@@ -87,13 +94,10 @@ on:
         default: true
         type: boolean
       glibc_floor:
-        description: "Fail if the built binaries need a newer glibc than this"
+        description: "Fail if the built binary needs a newer glibc than this"
         required: false
         default: "2.35"
         type: string
-
-env:
-  CARGO_TERM_COLOR: "always"
 
 permissions:
   contents: read # to check out code
@@ -131,9 +135,9 @@ jobs:
       - name: "Setup: GraalVM"
         # `elide.pkl` builds the image with `driverMode = "external"`, which needs
         # a real `native-image` on PATH. Runs before mise so that mise's shims win
-        # for javac/jlink; JAVA_HOME is deliberately left alone, so GraalVM
-        # contributes `native-image` and nothing else. See the script for why the
-        # 25.2.x line specifically.
+        # for javac; JAVA_HOME is deliberately left to mise, so GraalVM contributes
+        # `native-image` and nothing else. See the script for why the 25.2.x line
+        # specifically.
         run: |
           set -euo pipefail
           home="$(./scripts/setup-graalvm.sh "${RUNNER_TEMP}/graalvm")"
@@ -148,63 +152,45 @@ jobs:
         with:
           install: true
           cache: true
-      - name: "Setup: Rust"
-        uses: moonrepo/setup-rust@abb2d32350334249b178c401e5ec5836e0cd88d3 # v1.3.0
-        with:
-          # `.cargo/config.toml` turns on `-Zbuild-std`, which needs the std source.
-          components: rust-src
-          cache-target: release
-          # Both dimensions: the cache holds a linked, platform-specific
-          # target dir, so linux-arm64 and darwin-arm64 must not share one.
-          cache-extra-identifier: ${{ inputs.os }}-${{ inputs.arch }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Setup: Verify Toolchains"
-        # The platform image madura ships is whatever jlink emits, so the JDK
-        # behind it is pinned to JAVA_HOME rather than left to PATH order —
-        # GraalVM is on PATH here too and would otherwise be a coin flip.
+        # madura reads its platform metadata (lib/modules, lib/ct.sym) from
+        # JAVA_HOME at runtime, so JAVA_HOME must name a jimage-bearing JDK —
+        # mise's openjdk-25 here, not the builder GraalVM (which contributes
+        # only native-image).
         run: |
           set -euo pipefail
-          for tool in elide native-image cargo; do
+          for tool in elide native-image bun; do
             printf '%-14s %s\n' "$tool" "$(command -v "$tool" || echo 'MISSING')"
           done
           printf '%-14s %s\n' "JAVA_HOME" "$JAVA_HOME"
           printf '%-14s %s\n' "GRAALVM_HOME" "${GRAALVM_HOME:-<unset>}"
           command -v elide >/dev/null
           command -v native-image >/dev/null
-          test -x "$JAVA_HOME/bin/jlink"
+          test -f "$JAVA_HOME/lib/modules"
+          test -f "$JAVA_HOME/lib/ct.sym"
           grep -E '^(IMPLEMENTOR|JAVA_VERSION)=' "$JAVA_HOME/release" || true
-          echo "JLINK=$JAVA_HOME/bin/jlink" >> "$GITHUB_ENV"
       - name: "Setup: Maven Dependencies"
         # `--fresh` is required, not optional: without it elide resolves offline
         # against the global m2 cache, which is empty on a fresh runner, and
         # fails with a bare "Failed to resolve Maven dependencies".
-        working-directory: crates/madura_javac
         run: elide install --ecosystems maven --fresh
       - name: "Build: Distribution"
-        # `make all` is `target/jdkroot` then `target/dist`, in that order — the
-        # cargo build reads `MADURA_JAVA_HOME` out of the jlink'd JDK the first
-        # target produces. `JLINK` comes from the environment above; the
-        # Makefile's `?=` leaves an already-set value alone.
+        # `make all` runs `elide build --release` (the native image) then
+        # `make-dist.sh` (stages the binary and builds tarballs).
         run: make all
       - name: "Test: Smoke Compile"
-        # Proves the uploaded artifact is a working, hermetic compiler — with the
-        # builder's GraalVM moved out of the way first.
-        #
-        # Running it in place proves nothing: native-image can freeze the
-        # builder's `java.home` into the image, and javac then reads *that*
-        # lib/modules. On the machine that built the binary those paths exist, so
-        # a smoke test there passes while the artifact is broken for everyone
-        # else. Taking the toolchain away is what makes this test mean something.
+        # Proves the uploaded artifact is a working compiler against an ordinary
+        # JDK (mise's openjdk-25 via JAVA_HOME), with the builder GraalVM removed
+        # from the environment so a frozen builder path cannot mask a break.
         run: |
           set -euo pipefail
           out="${RUNNER_TEMP}/smoke"
           rm -rf "$out"
-          mv "${RUNNER_TEMP}/graalvm" "${RUNNER_TEMP}/graalvm.hidden"
           rc=0
 
-          # Every invocation runs without the toolchain that built the binary.
-          madura() { env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/bin/madura "$@"; }
+          # Every invocation runs without the GraalVM that built the binary, but
+          # with JAVA_HOME (openjdk-25) as the source of platform metadata.
+          madura() { env -u GRAALVM_HOME ./target/dist/bin/madura "$@"; }
 
           # `expect <code> <label> -- <args...>`: run madura, compare exit codes.
           # `|| got=$?` both keeps a nonzero exit from tripping `set -e` — several
@@ -222,7 +208,7 @@ jobs:
 
           # Passthrough (no subcommand) — the `javac` stand-in path.
           if ! madura tests/smoke/simple/Hello.java -d "$out/passthrough"; then
-            echo "::error::the distribution cannot compile without the toolchain that built it"
+            echo "::error::the distribution cannot compile against an ordinary JDK"
             rc=1
           fi
           test -f "$out/passthrough/simple/Hello.class" || rc=1
@@ -248,13 +234,11 @@ jobs:
           madura --version || rc=1
           madura --release 21 tests/smoke/simple/Hello.java -d "${out}21" || rc=1
 
-          mv "${RUNNER_TEMP}/graalvm.hidden" "${RUNNER_TEMP}/graalvm"
           exit "$rc"
       - name: "Test: glibc Floor"
-        # The distribution has to run on older hosts than the one that built it —
-        # CodSpeed's macro runners are Ubuntu 22.04 (2.35), and that is where the
-        # walltime benchmarks execute. A C23-default compiler silently lifts this
-        # floor to 2.38 via `__isoc23_*`, so it is checked rather than assumed.
+        # The distribution has to run on older hosts than the one that built it.
+        # A C23-default compiler silently lifts this floor via `__isoc23_*`, so
+        # it is checked rather than assumed.
         #
         # Nothing to check on Mach-O: there is no glibc, and the deployment
         # target is what bounds compatibility there instead.
@@ -264,7 +248,7 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
-          for f in ./target/dist/bin/madura ./target/dist/lib/*.so; do
+          for f in ./target/dist/bin/madura; do
             highest="$(objdump -T "$f" \
               | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
               | sed 's/GLIBC_//' \
@@ -287,7 +271,7 @@ jobs:
             echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/dist/bin/madura target/dist/lib/* "target/madura-$TARGET".tar.* 2>/dev/null
+            du -h target/dist/bin/madura "target/madura-$TARGET".tar.* 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "Artifact: Distribution"
@@ -295,9 +279,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: madura-dist-${{ inputs.os }}-${{ inputs.arch }}
-          # Both compressions ship as release assets. The benchmark job globs
-          # `*.tar.gz` out of this same artifact, so adding `.tar.xz` alongside
-          # it is additive; the uncompressed `.tar` is deliberately left behind.
+          # Both compressions ship as release assets; the uncompressed `.tar` is
+          # deliberately left behind.
           path: |
             target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.gz
             target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.xz
@@ -312,7 +295,6 @@ jobs:
           # The repo is internal, so tokenless upload is not an option.
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
-          # Its own flag: this suite exercises the assembled distribution
-          # end-to-end, not the Rust unit tests uploaded under `rust`.
+          # This suite exercises the assembled distribution end-to-end.
           flags: smoke
           report_type: test_results

@@ -6,7 +6,6 @@ name: CI
       - main
       - stable
       - release/*
-  # Allows CodSpeed to trigger backtest performance analysis.
   workflow_dispatch: {}
 
 permissions:
@@ -24,9 +23,7 @@ jobs:
       contents: "read" # to check out source code
     outputs:
       base: ${{ steps.filter.outputs.base }}
-      crates: ${{ steps.filter.outputs.crates }}
       jvm: ${{ steps.filter.outputs.jvm }}
-      benchmarks: ${{ steps.filter.outputs.benchmarks }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: "Setup: Harden Runner"
@@ -48,29 +45,14 @@ jobs:
         with:
           filters: .github/triage.yml
 
-  checks-rustfmt:
-    name: "Check"
-    needs: [triage]
-    uses: ./.github/workflows/check.rustfmt.yml
-    permissions:
-      contents: read # to check out source code
-
-  checks-clippy:
-    name: "Check"
-    needs: [triage]
-    uses: ./.github/workflows/check.clippy.yml
-    permissions:
-      contents: read # to check out source code
-    with:
-      # Main is where the full workspace lint is worth a native-image build.
-      full: true
-
   build:
     name: "Build"
     needs: [triage]
     uses: ./.github/workflows/job.build.yml
     permissions:
       contents: read # to check out source code
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,9 +60,6 @@ jobs:
           - os: linux
             arch: amd64
             runner: ubuntu-latest
-          # The benchmarks consume this leg: CodSpeed's macro runners are ARM64,
-          # and elide cannot run there, so the arm64 distribution has to be built
-          # somewhere with glibc >= 2.38 and shipped in.
           - os: linux
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -95,24 +74,14 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
 
-  test-cargo:
+  test-jvm:
     name: "Test"
     needs: [triage]
-    uses: ./.github/workflows/check.cargo-test.yml
+    uses: ./.github/workflows/check.jvm-test.yml
     permissions:
       contents: read # to check out source code
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  benchmarks:
-    name: "Benchmarks"
-    # Always runs on main: CodSpeed needs an unbroken series on the base branch
-    # for PR comparisons to mean anything. Consumes the build matrix's arm64 leg.
-    needs: [triage, build]
-    uses: ./.github/workflows/job.bench.yml
-    permissions:
-      contents: read # to check out source code
-      id-token: write # OpenID Connect authentication with CodSpeed
 
   release:
     name: "Release"

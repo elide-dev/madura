@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Assemble the hermetic madura distribution: <root>/{bin,lib}.
+# Assemble the madura distribution: a single native-image binary at
+# <root>/bin/madura. Platform metadata (lib/modules, lib/ct.sym) is read from
+# the caller's $JAVA_HOME at runtime, so nothing else ships.
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-profile="${1:-release}"
 dist="$repo/target/dist"
+image="$repo/.dev/artifacts/native-image/madura"
 
-# The distribution carries a platform image and a native shared library, so the
-# tarball is named for the machine that produced it rather than assumed.
+# The distribution is a native binary, so the tarball is named for the machine
+# that produced it rather than assumed.
 case "$(uname -m)" in
     x86_64) arch="amd64" ;;
     aarch64 | arm64) arch="arm64" ;;
@@ -17,8 +19,8 @@ case "$(uname -m)" in
         ;;
 esac
 case "$(uname -s)" in
-    Linux) os="linux" libext="so" ;;
-    Darwin) os="darwin" libext="dylib" ;;
+    Linux) os="linux" ;;
+    Darwin) os="darwin" ;;
     *)
         echo "make-dist: unsupported operating system $(uname -s)" >&2
         exit 1
@@ -26,19 +28,17 @@ case "$(uname -s)" in
 esac
 name="madura-$os-$arch"
 
-cargo build \
-    --profile "$profile" \
-    -p madura
+if [ ! -x "$image" ]; then
+    echo "make-dist: native image not found at $image (run \`make image\`)" >&2
+    exit 1
+fi
 
 rm -rf "$dist"
-mkdir -p "$dist/bin" "$dist/lib"
-cp "$repo/target/$profile/madura" "$dist/bin/madura"
-cp "$repo/target/lib/libmadura-javac.$libext" "$dist/lib/"
-cp "$repo/target/lib/modules" "$dist/lib/"
-cp "$repo/target/lib/ct.sym" "$dist/lib/"
+mkdir -p "$dist/bin"
+cp "$image" "$dist/bin/madura"
 
 rm -rf "$repo/target/${name:?}"
-cp -fr "$repo/target/dist" "$repo/target/$name"
+cp -fr "$dist" "$repo/target/$name"
 pushd "$repo/target"
 tar -cf "$name.tar" "$name"
 gzip --best -k -v -f "$name.tar"
@@ -47,8 +47,6 @@ popd
 
 echo "----------"
 du -h \
-    "$dist/lib/modules" \
-    "$dist"/lib/*."$libext" \
     "$dist/bin/madura" \
     "$repo/target/$name.tar.gz" \
     "$repo/target/$name.tar.xz"

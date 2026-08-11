@@ -2,6 +2,7 @@
   "name": "madura",
   "type": "module",
   "private": true,
+  "version": "1.0.1",
   "devDependencies": {
     "@types/bun": "latest"
   },

@@ -45,9 +45,7 @@ export const JAVA = which("JAVA_BIN", ["bin/java"], "java");
 function which(override: string, suffixes: string[], fallback: string): string {
   const explicit = process.env[override];
   if (explicit) return explicit;
-  const roots = [process.env.JAVA_HOME, join(REPO, "target/jdkroot")].filter(
-    (root) => root !== undefined,
-  );
+  const roots = [process.env.JAVA_HOME].filter((root) => root !== undefined);
   for (const root of roots) {
     for (const suffix of suffixes) {
       const candidate = join(root, suffix);
@@ -59,6 +57,10 @@ function which(override: string, suffixes: string[], fallback: string): string {
 
 if (!existsSync(MADURA)) {
   throw new Error(`no madura binary at ${MADURA} — run \`make all\`, or set MADURA_BIN`);
+}
+
+if (!process.env.JAVA_HOME) {
+  throw new Error("JAVA_HOME must be set — madura reads lib/modules and ct.sym from it");
 }
 
 export type Case = {
