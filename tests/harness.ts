@@ -28,8 +28,8 @@ export const REPO = resolve(import.meta.dir, "..");
 const SMOKE_DIR = "tests/smoke";
 const OUT_DIR = "target/smoke";
 
-/** The launcher under test: `<root>/bin/madura` beside `<root>/lib/modules`. */
-export const MADURA = process.env.MADURA_BIN ?? join(REPO, "target/dist/bin/madura");
+/** The binary under test: `<root>/madura`, beside its `<arch>/lib/modules`. */
+export const MADURA = process.env.MADURA_BIN ?? join(REPO, "target/dist/madura");
 
 /**
  * The reference compiler. A full JDK is preferred over the jlink'd image in
@@ -57,10 +57,6 @@ function which(override: string, suffixes: string[], fallback: string): string {
 
 if (!existsSync(MADURA)) {
   throw new Error(`no madura binary at ${MADURA} — run \`make all\`, or set MADURA_BIN`);
-}
-
-if (!process.env.JAVA_HOME) {
-  throw new Error("JAVA_HOME must be set — madura reads lib/modules and ct.sym from it");
 }
 
 export type Case = {

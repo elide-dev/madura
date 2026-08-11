@@ -1,9 +1,8 @@
 # madura
 
-[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/elide-dev/madura?utm_source=badge)
 [![codecov](https://codecov.io/gh/elide-dev/madura/graph/badge.svg?token=dQmhOolA5k)](https://codecov.io/gh/elide-dev/madura)
 
-An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from Rust and JDK internals only.
+An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from JDK internals only.
 
 > [!WARNING]
 > This is unstable software.
@@ -60,10 +59,9 @@ madura check -d target ./some/java/Code.java
 To make absolutely sure that `madura` behaves as expected, there are several layers of testing:
 
 - **Unit Testing**
-  - JVM-side tests guarantee the contract established by the thin Kotlin shared-lib
-  - Rust-side tests guarantee unit behavior and shared-library usage
-- **E2E Testing**
-  - Rust E2E tests guarantee expected shared-library behavior in a native context
+  - JVM-side tests (`elide test`) guarantee the compiler entrypoint's contract
+- **CLI Testing**
+  - `bun test` drives the assembled binary end-to-end: subcommands, passthrough, `--version`, and platform-metadata resolution
 - **Smoke**
   - For each smoke test, a reference JVM bytecode class is built using normal `javac` from OpenJDK
   - Then, `madura check` is run, and expected outputs are checked
@@ -74,18 +72,18 @@ To make absolutely sure that `madura` behaves as expected, there are several lay
 
 ## Architecture
 
-**(1) A minimal OpenJDK image is prepared via `jlink`.**
+**(1) Platform metadata is prepared via `jlink`.**
 
-The minimal image is designed to (effectively) build `$JAVA_HOME/lib/modules` in a way that doesn't bloat your toolchain. Specific modules can be shipped without including e.g. Native Image, GraalVM's SDK modules, and so on, which most users don't need.
+A minimal image (`java.base`, `java.compiler`, `jdk.compiler`) supplies `lib/modules` (the platform jimage) and `lib/ct.sym` (for `--release N` targeting), without bloating your toolchain with Native Image or GraalVM SDK modules most users don't need.
 
-**(2) GraalVM `native-image` is used to build a shared library which implements `javac`.**
+**(2) GraalVM `native-image` builds `madura` as a single binary.**
 
-The Java compiler is built as `libmadura.so`, and then FFI'd into the Cargo build, where it can be used in Rust.
+The compiler entrypoint is Kotlin (`dev.elide.jvm.JavacInvoker`), built directly into a native executable — no Rust, no shared library, no FFI. Its `main` is the whole CLI.
 
-**(3) Minimalist Rust command line wrapping the shared-lib.**
+**(3) The CLI mirrors `javac`.**
 
-The entrypoint is built via [`crates/madura`](crates/madura). The CLI entrypoint loads the shared-library, checks/prepares arguments via zero-overhead calls, and then invokes check/compile routines.
+`madura check` runs `javac` without codegen; `madura compile` (or no subcommand at all) is a drop-in `javac`. Platform metadata is located binary-relative — `<exe>/../<arch>/lib/modules` — with `$JAVA_HOME` and an explicit `--java-home <dir>` as fallbacks.
 
-**(4) JDK APIs ship with the dist.**
+**(4) The distribution is hermetic.**
 
-To enable the packaged `javac` to understand release APIs, `lib/modules` and `ct.sym` ship in the distribution. Thus, no `JAVA_HOME` is required at all to run Madura.
+The dist ships the binary beside its `<arch>/lib/{modules,ct.sym}`, so no JDK or `JAVA_HOME` is required at runtime.

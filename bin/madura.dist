@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export PROJECT_ROOT="$PWD"
-exec "$PROJECT_ROOT/target/dist/bin/madura" "$@"
+exec "$PROJECT_ROOT/target/dist/madura" "$@"

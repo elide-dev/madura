@@ -3,12 +3,14 @@ name: "Job - Build"
 # Builds the distribution in one job:
 #
 #   elide build  ->  .dev/artifacts/native-image/madura   (GraalVM native image)
-#   make-dist.sh ->  target/dist/bin/madura + tarballs
+#   jlink        ->  target/jdkroot/lib/{modules,ct.sym}   (platform metadata)
+#   make-dist.sh ->  target/dist/{madura,<arch>/lib} + tarballs
 #
 # The native image IS the CLI: its `main` (dev.elide.jvm.JavacInvoker) parses
-# the check/compile/drop-in modes and drives javac. Platform metadata
-# (lib/modules, lib/ct.sym) is read from the runtime `$JAVA_HOME`, so the
-# distribution is a single binary with no sidecar.
+# the check/compile/drop-in modes and drives javac. It resolves platform
+# metadata binary-relative (`<exe>/../<arch>/lib/modules`), so the dist ships
+# the binary beside its `<arch>/lib/{modules,ct.sym}` and needs no JDK at
+# runtime; `$JAVA_HOME` and `--java-home` are fallbacks.
 #
 # The tarball is what gets uploaded: `actions/upload-artifact` zips its input and
 # drops the executable bit, so shipping the binary directly would produce a
@@ -153,10 +155,9 @@ jobs:
           install: true
           cache: true
       - name: "Setup: Verify Toolchains"
-        # madura reads its platform metadata (lib/modules, lib/ct.sym) from
-        # JAVA_HOME at runtime, so JAVA_HOME must name a jimage-bearing JDK —
-        # mise's openjdk-25 here, not the builder GraalVM (which contributes
-        # only native-image).
+        # jlink (from JAVA_HOME) supplies the platform metadata the dist ships,
+        # so JAVA_HOME must name a jimage-bearing JDK — mise's openjdk-25 here,
+        # not the builder GraalVM (which contributes only native-image).
         run: |
           set -euo pipefail
           for tool in elide native-image bun; do
@@ -168,6 +169,7 @@ jobs:
           command -v native-image >/dev/null
           test -f "$JAVA_HOME/lib/modules"
           test -f "$JAVA_HOME/lib/ct.sym"
+          test -x "$JAVA_HOME/bin/jlink"
           grep -E '^(IMPLEMENTOR|JAVA_VERSION)=' "$JAVA_HOME/release" || true
       - name: "Setup: Maven Dependencies"
         # `--fresh` is required, not optional: without it elide resolves offline
@@ -175,22 +177,25 @@ jobs:
         # fails with a bare "Failed to resolve Maven dependencies".
         run: elide install --ecosystems maven --fresh
       - name: "Build: Distribution"
-        # `make all` runs `elide build --release` (the native image) then
-        # `make-dist.sh` (stages the binary and builds tarballs).
-        run: make all
+        # `make all` runs `elide build --release` (the native image), jlink
+        # (platform metadata), then `make-dist.sh` (stages both, builds
+        # tarballs). JLINK is pinned to JAVA_HOME so the shipped metadata is
+        # openjdk-25's, not the builder GraalVM's.
+        run: make all JLINK="$JAVA_HOME/bin/jlink"
       - name: "Test: Smoke Compile"
-        # Proves the uploaded artifact is a working compiler against an ordinary
-        # JDK (mise's openjdk-25 via JAVA_HOME), with the builder GraalVM removed
-        # from the environment so a frozen builder path cannot mask a break.
+        # Proves the uploaded artifact is a working, hermetic compiler: both the
+        # builder GraalVM and JAVA_HOME are removed, so the shipped
+        # `<arch>/lib/{modules,ct.sym}` beside the binary is the only source of
+        # platform metadata.
         run: |
           set -euo pipefail
           out="${RUNNER_TEMP}/smoke"
           rm -rf "$out"
           rc=0
 
-          # Every invocation runs without the GraalVM that built the binary, but
-          # with JAVA_HOME (openjdk-25) as the source of platform metadata.
-          madura() { env -u GRAALVM_HOME ./target/dist/bin/madura "$@"; }
+          # Every invocation runs with no JDK in the environment at all: the
+          # binary must find its metadata binary-relative.
+          madura() { env -u JAVA_HOME -u GRAALVM_HOME ./target/dist/madura "$@"; }
 
           # `expect <code> <label> -- <args...>`: run madura, compare exit codes.
           # `|| got=$?` both keeps a nonzero exit from tripping `set -e` — several
@@ -208,7 +213,7 @@ jobs:
 
           # Passthrough (no subcommand) — the `javac` stand-in path.
           if ! madura tests/smoke/simple/Hello.java -d "$out/passthrough"; then
-            echo "::error::the distribution cannot compile against an ordinary JDK"
+            echo "::error::the distribution cannot compile hermetically"
             rc=1
           fi
           test -f "$out/passthrough/simple/Hello.class" || rc=1
@@ -248,7 +253,7 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
-          for f in ./target/dist/bin/madura; do
+          for f in ./target/dist/madura; do
             highest="$(objdump -T "$f" \
               | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
               | sed 's/GLIBC_//' \
@@ -271,7 +276,7 @@ jobs:
             echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/dist/bin/madura "target/madura-$TARGET".tar.* 2>/dev/null
+            du -h target/dist/madura target/dist/*/lib/modules "target/madura-$TARGET".tar.* 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "Artifact: Distribution"
