@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/elide-dev/madura/compare/v1.0.1...v1.1.0) (2026-08-11)
+
+
+### Features
+
+* macos support ([#7](https://github.com/elide-dev/madura/issues/7)) ([20a18d8](https://github.com/elide-dev/madura/commit/20a18d8caf4253ef26a77d33d8048cfa3ec59842))
+
+
+### Bug Fixes
+
+* **ci:** publish releases from a draft so assets can attach ([#5](https://github.com/elide-dev/madura/issues/5)) ([10ccde4](https://github.com/elide-dev/madura/commit/10ccde47b317e49a9527a9da49201054afc5cc9a))
+
 ## [1.0.1](https://github.com/elide-dev/madura/compare/v1.0.0...v1.0.1) (2026-08-09)
 
 
