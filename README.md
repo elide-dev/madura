@@ -82,8 +82,8 @@ The compiler entrypoint is Kotlin (`dev.elide.jvm.JavacInvoker`), built directly
 
 **(3) The CLI mirrors `javac`.**
 
-`madura check` runs `javac` without codegen; `madura compile` (or no subcommand at all) is a drop-in `javac`. Platform metadata is located binary-relative — `<exe>/../<arch>/lib/modules` — with `$JAVA_HOME` and an explicit `--java-home <dir>` as fallbacks.
+`madura check` runs `javac` without codegen; `madura compile` (or no subcommand at all) is a drop-in `javac`. Platform metadata is located binary-relative — `<exe>/../lib/modules` — with `$JAVA_HOME` and an explicit `--java-home <dir>` as fallbacks.
 
 **(4) The distribution is hermetic.**
 
-The dist ships the binary beside its `<arch>/lib/{modules,ct.sym}`, so no JDK or `JAVA_HOME` is required at runtime.
+The dist ships the binary beside its `lib/{modules,ct.sym}`, so no JDK or `JAVA_HOME` is required at runtime.

@@ -62,18 +62,15 @@ object JavacInvoker {
   private fun resolvePlatformHome(forced: String?): String? {
     if (forced != null) return if (hasModules(forced)) forced else null
 
-    // Binary-relative: `<exe>/../<os.arch>/lib/modules`. Only meaningful in the
-    // native image, where the executable path is knowable; a symlinked launcher
-    // is resolved to its real location first, matching the shipped layout.
+    // Binary-relative: `<exe>/../lib/modules`. Only meaningful in the native
+    // image, where the executable path is knowable; a symlinked launcher is
+    // resolved to its real location first, matching the shipped layout.
     if (ImageInfo.inImageCode()) {
       try {
         val exe = ProcessProperties.getExecutableName()
         if (exe != null) {
           val here = Paths.get(exe).toRealPath().parent
-          if (here != null) {
-            val root = here.resolve(System.getProperty("os.arch")).toString()
-            if (hasModules(root)) return root
-          }
+          if (here != null && hasModules(here.toString())) return here.toString()
         }
       } catch (_: Exception) {
         // Unresolvable executable path: fall through to $JAVA_HOME.

@@ -120,11 +120,9 @@ artifacts {
         "--emit=build-report"
         "--exact-reachability-metadata"
         "--enable-sbom=cyclonedx,export"
-        "--future-defaults=all"
         "-R:MinHeapSize=32m"
         "-R:MaxHeapSize=1g"
         "-H:+UnlockExperimentalVMOptions"
-        "-H:+UseSystemLocale"
         "-H:+BlindConstants"
         "-H:-CheckToolchain"
         "-H:+AllowJRTFileSystem"
@@ -132,7 +130,6 @@ artifacts {
         "-H:+TrackPrimitiveValues"
         "-H:+TrackAccessChain"
         "-H:+PreserveFramePointer"
-        "-H:+OptDeDuplication"
         "-H:+ReportExceptionStackTraces"
         "-H:+UseCompressedReferences"
         "-H:-ParseRuntimeOptions"
@@ -142,11 +139,7 @@ artifacts {
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.javac"
         "-H:IncludeResourceBundles=com.sun.tools.javac.resources.version"
         "-H:ConfigurationFileDirectories=native-image"
-        "-H:CStandard=C11"
         "-H:DefaultCharset=UTF-8"
-        // Full symbols, no obfuscation: profilers and a flamegraph need every
-        // method to keep its name. `-g` adds DWARF (file:line attribution);
-        // DeleteLocalSymbols would otherwise strip the symtab.
         "-g"
         "-H:-DeleteLocalSymbols"
         "-H:-UnlockExperimentalVMOptions"

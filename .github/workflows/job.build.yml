@@ -4,13 +4,13 @@ name: "Job - Build"
 #
 #   elide build  ->  .dev/artifacts/native-image/madura   (GraalVM native image)
 #   jlink        ->  target/jdkroot/lib/{modules,ct.sym}   (platform metadata)
-#   make-dist.sh ->  target/dist/{madura,<arch>/lib} + tarballs
+#   make-dist.sh ->  target/dist/{madura,lib} + tarballs
 #
 # The native image IS the CLI: its `main` (dev.elide.jvm.JavacInvoker) parses
 # the check/compile/drop-in modes and drives javac. It resolves platform
-# metadata binary-relative (`<exe>/../<arch>/lib/modules`), so the dist ships
-# the binary beside its `<arch>/lib/{modules,ct.sym}` and needs no JDK at
-# runtime; `$JAVA_HOME` and `--java-home` are fallbacks.
+# metadata binary-relative (`<exe>/../lib/modules`), so the dist ships the
+# binary beside its `lib/{modules,ct.sym}` and needs no JDK at runtime;
+# `$JAVA_HOME` and `--java-home` are fallbacks.
 #
 # The tarball is what gets uploaded: `actions/upload-artifact` zips its input and
 # drops the executable bit, so shipping the binary directly would produce a
@@ -276,7 +276,7 @@ jobs:
             echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/dist/madura target/dist/*/lib/modules "target/madura-$TARGET".tar.* 2>/dev/null
+            du -h target/dist/madura target/dist/lib/modules "target/madura-$TARGET".tar.* 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "Artifact: Distribution"

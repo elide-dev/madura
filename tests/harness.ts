@@ -28,7 +28,7 @@ export const REPO = resolve(import.meta.dir, "..");
 const SMOKE_DIR = "tests/smoke";
 const OUT_DIR = "target/smoke";
 
-/** The binary under test: `<root>/madura`, beside its `<arch>/lib/modules`. */
+/** The binary under test: `<root>/madura`, beside its `lib/modules`. */
 export const MADURA = process.env.MADURA_BIN ?? join(REPO, "target/dist/madura");
 
 /**

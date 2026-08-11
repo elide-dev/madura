@@ -2,7 +2,7 @@
  * CLI-level behaviors the corpus-driven smoke suite does not exercise:
  * drop-in (subcommand-less) passthrough, the `--version` handoff to javac, and
  * the platform-metadata contract — the shipped binary is hermetic (resolves
- * `<exe>/../<arch>/lib/modules`), `$JAVA_HOME` is a fallback, and an explicit
+ * `<exe>/../lib/modules`), `$JAVA_HOME` is a fallback, and an explicit
  * `--java-home` overrides both.
  */
 import { expect, test } from "bun:test";
