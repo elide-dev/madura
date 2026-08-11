@@ -18,7 +18,8 @@ base: &base
   - ".release-please-manifest.json"
 
 # The Kotlin entrypoint and its native-image configuration. Touching any of
-# these rebuilds `madura-javac.so`, which every Rust target links against.
+# these rebuilds `madura-javac.{so,dylib}`, which every Rust target links
+# against.
 jvm: &jvm
   - *base
   - "crates/madura_javac/src/*.kt"

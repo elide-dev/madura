@@ -54,6 +54,8 @@ fn main() {
         env::var("DEP_MADURA_JAVAC_LIB_DIR")
             .expect("DEP_MADURA_JAVAC_LIB_DIR is set by madura_javac's build script"),
     );
+    let lib_file = env::var("DEP_MADURA_JAVAC_LIB_FILE")
+        .expect("DEP_MADURA_JAVAC_LIB_FILE is set by madura_javac's build script");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Hermetic platform metadata is sourced from the build-time JDK. The
@@ -94,7 +96,7 @@ fn main() {
 
     // OUT_DIR = target/<profile>/build/<pkg>-<hash>/out; three ancestors up is
     // target/<profile>; its parent is the dist root in the dev tree, so the
-    // staged lib/ sits at target/lib — matching the $ORIGIN/../lib rpath from
+    // staged lib/ sits at target/lib — matching the <origin>/../lib rpath from
     // target/<profile>/madura, and mirroring the shipped <root>/{bin,lib} shape.
     let profile_dir = out_dir
         .ancestors()
@@ -106,17 +108,20 @@ fn main() {
         .join("lib");
     fs::create_dir_all(&staged_lib).unwrap();
 
-    // The .so is small and $ORIGIN/../lib is the FIRST rpath entry, so this
+    // The library is small and <origin>/../lib is the FIRST rpath entry, so this
     // copy must be unconditional — a stale staged copy would shadow OUT_DIR.
-    fs::copy(
-        lib_dir.join("libmadura-javac.so"),
-        staged_lib.join("libmadura-javac.so"),
-    )
-    .unwrap();
+    fs::copy(lib_dir.join(&lib_file), staged_lib.join(&lib_file)).unwrap();
     stage(&modules, &staged_lib.join("modules"));
     stage(&ct_sym, &staged_lib.join("ct.sym"));
 
+    // "Directory of the binary doing the loading", spelled per object format:
+    // `$ORIGIN` in ELF, `@loader_path` in Mach-O.
+    let origin = match env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() {
+        "macos" => "@loader_path",
+        _ => "$ORIGIN",
+    };
+
     println!("cargo::rerun-if-env-changed=MADURA_JAVA_HOME");
-    println!("cargo::rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
+    println!("cargo::rustc-link-arg=-Wl,-rpath,{origin}/../lib");
     println!("cargo::rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
 }
