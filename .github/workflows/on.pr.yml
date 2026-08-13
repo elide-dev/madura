@@ -20,9 +20,7 @@ jobs:
       contents: "read" # to check out source code
     outputs:
       base: ${{ steps.filter.outputs.base }}
-      crates: ${{ steps.filter.outputs.crates }}
       jvm: ${{ steps.filter.outputs.jvm }}
-      benchmarks: ${{ steps.filter.outputs.benchmarks }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: "Setup: Harden Runner"
@@ -44,35 +42,18 @@ jobs:
         with:
           filters: .github/triage.yml
 
-  checks-rustfmt:
-    name: "Check"
-    needs: [triage]
-    if: fromJSON(needs.triage.outputs.crates)
-    uses: ./.github/workflows/check.rustfmt.yml
-    permissions:
-      contents: read # to check out source code
-
-  checks-clippy:
-    name: "Check"
-    needs: [triage]
-    if: fromJSON(needs.triage.outputs.crates)
-    uses: ./.github/workflows/check.clippy.yml
-    permissions:
-      contents: read # to check out source code
-    with:
-      # Workspace-wide clippy costs a native-image build; main gets the full run.
-      full: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-clippy') }}
-
   build:
     name: "Build"
     needs: [triage]
     if: >-
       !contains(github.event.pull_request.labels.*.name, 'ci:no-build') && (
-        fromJSON(needs.triage.outputs.crates) || fromJSON(needs.triage.outputs.workflows)
+        fromJSON(needs.triage.outputs.jvm) || fromJSON(needs.triage.outputs.workflows)
       )
     uses: ./.github/workflows/job.build.yml
     permissions:
       contents: read # to check out source code
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: ${{ !contains(github.event.pull_request.labels.*.name, 'ci:no-fail-fast') }}
       matrix:
@@ -80,9 +61,6 @@ jobs:
           - os: linux
             arch: amd64
             runner: ubuntu-latest
-          # The benchmarks consume this leg: CodSpeed's macro runners are ARM64,
-          # and elide cannot run there, so the arm64 distribution has to be built
-          # somewhere with glibc >= 2.38 and shipped in.
           - os: linux
             arch: arm64
             runner: ubuntu-24.04-arm
@@ -97,62 +75,34 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
 
-  test-cargo:
-    name: "Test"
-    needs: [triage]
-    if: fromJSON(needs.triage.outputs.crates)
-    uses: ./.github/workflows/check.cargo-test.yml
-    permissions:
-      contents: read # to check out source code
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
   test-jvm:
     name: "Test"
     needs: [triage]
-    if: fromJSON(needs.triage.outputs.crates)
+    if: fromJSON(needs.triage.outputs.jvm)
     uses: ./.github/workflows/check.jvm-test.yml
     permissions:
       contents: read # to check out source code
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  benchmarks:
-    name: "Benchmarks"
-    # Consumes the build matrix's arm64 leg, so it cannot start until that
-    # lands — and it is pointless if the build was skipped or failed.
-    needs: [triage, build]
-    if: >-
-      needs.build.result == 'success' &&
-      fromJSON(needs.triage.outputs.benchmarks) &&
-      !contains(github.event.pull_request.labels.*.name, 'ci:no-bench')
-    uses: ./.github/workflows/job.bench.yml
-    permissions:
-      contents: read # to check out source code
-      id-token: write # OpenID Connect authentication with CodSpeed
-
   gate:
     name: "Gate"
     if: always() && github.event.pull_request.draft == false
-    needs: [build, test-cargo, checks-rustfmt, benchmarks]
+    needs: [build, test-jvm]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         env:
           BUILD: ${{ needs.build.result }}
-          TESTS: ${{ needs.test-cargo.result }}
-          RUSTFMT: ${{ needs.checks-rustfmt.result }}
-          BENCH: ${{ needs.benchmarks.result }}
+          TESTS: ${{ needs.test-jvm.result }}
         run: |
-          echo "Build:      $BUILD"
-          echo "Tests:      $TESTS"
-          echo "Rustfmt:    $RUSTFMT"
-          echo "Benchmarks: $BENCH"
+          echo "Build:    $BUILD"
+          echo "Tests:    $TESTS"
 
           # `skipped` is a pass: triage decided the area was untouched. Only a
           # job that actually ran and did not succeed fails the gate.
           rc=0
-          for pair in "Build:$BUILD" "Tests:$TESTS" "Rustfmt:$RUSTFMT" "Benchmarks:$BENCH"; do
+          for pair in "Build:$BUILD" "Tests:$TESTS"; do
             name="${pair%%:*}"
             result="${pair##*:}"
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then

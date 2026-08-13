@@ -28,8 +28,8 @@ export const REPO = resolve(import.meta.dir, "..");
 const SMOKE_DIR = "tests/smoke";
 const OUT_DIR = "target/smoke";
 
-/** The launcher under test: `<root>/bin/madura` beside `<root>/lib/modules`. */
-export const MADURA = process.env.MADURA_BIN ?? join(REPO, "target/dist/bin/madura");
+/** The binary under test: `<root>/madura`, beside its `lib/modules`. */
+export const MADURA = process.env.MADURA_BIN ?? join(REPO, "target/dist/madura");
 
 /**
  * The reference compiler. A full JDK is preferred over the jlink'd image in
@@ -45,9 +45,7 @@ export const JAVA = which("JAVA_BIN", ["bin/java"], "java");
 function which(override: string, suffixes: string[], fallback: string): string {
   const explicit = process.env[override];
   if (explicit) return explicit;
-  const roots = [process.env.JAVA_HOME, join(REPO, "target/jdkroot")].filter(
-    (root) => root !== undefined,
-  );
+  const roots = [process.env.JAVA_HOME].filter((root) => root !== undefined);
   for (const root of roots) {
     for (const suffix of suffixes) {
       const candidate = join(root, suffix);

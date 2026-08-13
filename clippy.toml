@@ -1,6 +1,0 @@
-pass-by-value-size-limit = 64
-stack-size-threshold = 131072
-enum-variant-size-threshold = 128
-too-large-for-stack = 4096
-avoid-breaking-exported-api = false
-accept-comment-above-attributes = true

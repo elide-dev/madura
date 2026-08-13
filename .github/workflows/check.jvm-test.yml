@@ -40,9 +40,6 @@ on:
         default: true
         type: boolean
 
-env:
-  CARGO_TERM_COLOR: "always"
-
 permissions:
   contents: read # to check out code
 
@@ -72,19 +69,6 @@ jobs:
         with:
           fetch-depth: 1
           submodules: false
-      - name: "Setup: Java (Vanilla)"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        id: java-vanilla
-        with:
-          distribution: temurin
-          java-version: '25'
-      - name: "Setup: Java (GVM)"
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
-        id: java-gvm
-        with:
-          distribution: graalvm
-          java-version: '25'
-          set-default: false
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -92,35 +76,20 @@ jobs:
         with:
           install: true
           cache: true
-      - name: "Setup: Environment"
-        run: |
-          set -euo pipefail
-          home="${{ steps.java-gvm.outputs.path }}"
-          vanilla="${{ steps.java-vanilla.outputs.path }}"
-          echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
-          echo "VANILLA_HOME=$vanilla" >> "$GITHUB_ENV"
-          echo "$vanilla/bin" >> "$GITHUB_PATH"
       - name: "Setup: Maven Dependencies"
-        working-directory: crates/madura_javac
         run: elide install --ecosystems maven --fresh
-      - name: "Build: Minimal JDK"
-        run: |
-          set -euo pipefail
-          make JLINK="$VANILLA_HOME/bin/jlink" target/jdkroot
-          echo "MADURA_JAVA_HOME=$PWD/target/jdkroot" >> "$GITHUB_ENV"
       - name: "Test: JVM"
         id: testsuite
-        working-directory: crates/madura_javac
         run: elide test --coverage
       - name: "Report: Coverage → Codecov"
         # The JaCoCo report `elide.pkl` asks for. There is no test-results
         # upload beside it: `elide test` emits coverage only, no JUnit XML.
         if: >-
           ${{ inputs.coverage && always()
-          && hashFiles('crates/madura_javac/.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml') != '' }}
+          && hashFiles('.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml') != '' }}
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          files: crates/madura_javac/.dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml
+          files: .dev/artifacts/coverage/jvm/jvm-test/jvm-test.xml
           # The repo is internal, so tokenless upload is not an option.
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false

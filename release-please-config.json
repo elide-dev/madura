@@ -10,9 +10,9 @@
       "draft": true,
       "extra-files": [
         {
-          "type": "toml",
-          "path": "Cargo.toml",
-          "jsonpath": "$.workspace.package.version"
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
         }
       ]
     }
