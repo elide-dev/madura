@@ -8,11 +8,6 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
-      hosted:
-        description: "Runner Host"
-        required: false
-        default: ""
-        type: string
       coverage:
         description: "Measure coverage and upload it to Codecov"
         required: false
@@ -28,11 +23,6 @@ on:
         description: "Runner"
         required: false
         default: "ubuntu-latest"
-        type: string
-      hosted:
-        description: "Runner Host"
-        required: false
-        default: ""
         type: string
       coverage:
         description: "Measure coverage and upload it to Codecov"
@@ -57,18 +47,22 @@ jobs:
           disable-sudo: true
           egress-policy: audit
       - name: "Setup: Checkout"
-        if: inputs.hosted != 'nsc'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
-      - name: "Setup: Checkout (NSC)"
-        if: inputs.hosted == 'nsc'
-        uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
-        with:
-          fetch-depth: 1
-          submodules: false
+      - name: "Setup: GraalVM"
+        # `elide.pkl` builds the image with `driverMode = "external"`, which needs
+        # a real `native-image` on PATH. Runs before mise so that mise's shims win
+        # for javac; JAVA_HOME is deliberately left to mise, so GraalVM contributes
+        # `native-image` and nothing else. See the script for why the 25.2.x line
+        # specifically.
+        run: |
+          set -euo pipefail
+          home="$(./scripts/setup-graalvm.sh "${RUNNER_TEMP}/graalvm")"
+          echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
+          echo "$home/bin" >> "$GITHUB_PATH"
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -76,6 +70,23 @@ jobs:
         with:
           install: true
           cache: true
+      - name: "Setup: Verify Toolchains"
+        # jlink (from JAVA_HOME) supplies the platform metadata the dist ships,
+        # so JAVA_HOME must name a jimage-bearing JDK — mise's openjdk-25 here,
+        # not the builder GraalVM (which contributes only native-image).
+        run: |
+          set -euo pipefail
+          for tool in elide native-image bun; do
+            printf '%-14s %s\n' "$tool" "$(command -v "$tool" || echo 'MISSING')"
+          done
+          printf '%-14s %s\n' "JAVA_HOME" "$JAVA_HOME"
+          printf '%-14s %s\n' "GRAALVM_HOME" "${GRAALVM_HOME:-<unset>}"
+          command -v elide >/dev/null
+          command -v native-image >/dev/null
+          test -f "$JAVA_HOME/lib/modules"
+          test -f "$JAVA_HOME/lib/ct.sym"
+          test -x "$JAVA_HOME/bin/jlink"
+          grep -E '^(IMPLEMENTOR|JAVA_VERSION)=' "$JAVA_HOME/release" || true
       - name: "Setup: Maven Dependencies"
         run: elide install --ecosystems maven --fresh
       - name: "Test: JVM"

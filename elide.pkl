@@ -3,7 +3,8 @@ import "elide:Sources.pkl" as Sources
 import "elide:Jvm.pkl" as Jvm
 import "elide:NativeImage.pkl" as NativeImage
 
-name = "madura-javac"
+name = "madura"
+version = "1.1.0"
 
 local jdkTarget = 25
 local kotlinTarget = "2.4"
@@ -115,11 +116,11 @@ artifacts {
       optimization = "2"
 
       flags {
+        "--verbose"
+        "--libc=cosmo"
         "-march=compatibility"
         "--gc=\(gc)"
-        "--emit=build-report"
         "--exact-reachability-metadata"
-        "--enable-sbom=cyclonedx,export"
         "-R:MinHeapSize=32m"
         "-R:MaxHeapSize=1g"
         "-H:+UnlockExperimentalVMOptions"

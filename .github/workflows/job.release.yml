@@ -46,9 +46,7 @@ on:
         description: "JSON array of {os, arch} platforms to attach to the release"
         required: false
         default: >-
-          [{"os": "linux", "arch": "amd64"},
-           {"os": "linux", "arch": "arm64"},
-           {"os": "darwin", "arch": "arm64"}]
+          [{"os": "cosmo", "arch": "universal"}]
         type: string
   workflow_dispatch:
     inputs:
@@ -61,9 +59,7 @@ on:
         description: "JSON array of {os, arch} platforms to attach to the release"
         required: false
         default: >-
-          [{"os": "linux", "arch": "amd64"},
-           {"os": "linux", "arch": "arm64"},
-           {"os": "darwin", "arch": "arm64"}]
+          [{"os": "cosmo", "arch": "universal"}]
         type: string
 
 permissions:
@@ -122,7 +118,7 @@ jobs:
       - name: "Release: Stage Assets"
         # The tarballs are built with an unversioned name so the benchmark
         # pipeline can glob them; release assets are renamed to carry the
-        # version, because a downloaded `madura-linux-amd64.tar.gz` is
+        # version, because a downloaded `madura-cosmo-universal.tar.gz` is
         # indistinguishable from every other release once it is on disk.
         env:
           VERSION: ${{ needs.release-please.outputs.version }}

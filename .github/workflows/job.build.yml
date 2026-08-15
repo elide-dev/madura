@@ -29,21 +29,6 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
-      os:
-        description: "Operating system label (linux | darwin); must match the runner"
-        required: false
-        default: "linux"
-        type: string
-      arch:
-        description: "Architecture label (amd64 | arm64); must match the runner"
-        required: false
-        default: "amd64"
-        type: string
-      hosted:
-        description: "Runner Host"
-        required: false
-        default: ""
-        type: string
       artifact:
         description: "Upload the assembled distribution"
         required: false
@@ -54,11 +39,6 @@ on:
         required: false
         default: true
         type: boolean
-      glibc_floor:
-        description: "Fail if the built binary needs a newer glibc than this"
-        required: false
-        default: "2.35"
-        type: string
     secrets:
       CODECOV_TOKEN:
         description: "Codecov upload token; required because the repo is not public"
@@ -70,21 +50,6 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
-      os:
-        description: "Operating system label (linux | darwin); must match the runner"
-        required: false
-        default: "linux"
-        type: string
-      arch:
-        description: "Architecture label (amd64 | arm64); must match the runner"
-        required: false
-        default: "amd64"
-        type: string
-      hosted:
-        description: "Runner Host"
-        required: false
-        default: ""
-        type: string
       artifact:
         description: "Upload the assembled distribution"
         required: false
@@ -95,18 +60,13 @@ on:
         required: false
         default: true
         type: boolean
-      glibc_floor:
-        description: "Fail if the built binary needs a newer glibc than this"
-        required: false
-        default: "2.35"
-        type: string
 
 permissions:
   contents: read # to check out code
 
 jobs:
   build:
-    name: "Distribution (${{ inputs.os }}-${{ inputs.arch }})"
+    name: "Distribution (cosmo)"
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
     permissions:
@@ -122,18 +82,11 @@ jobs:
           disable-sudo: true
           egress-policy: audit
       - name: "Setup: Checkout"
-        if: inputs.hosted != 'nsc'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           submodules: false
           persist-credentials: false
-      - name: "Setup: Checkout (NSC)"
-        if: inputs.hosted == 'nsc'
-        uses: namespacelabs/nscloud-checkout-action@445c25d7009680597d73eb03c4e1cd5be522ed73 # v9.0.0
-        with:
-          fetch-depth: 1
-          submodules: false
       - name: "Setup: GraalVM"
         # `elide.pkl` builds the image with `driverMode = "external"`, which needs
         # a real `native-image` on PATH. Runs before mise so that mise's shims win
@@ -145,6 +98,21 @@ jobs:
           home="$(./scripts/setup-graalvm.sh "${RUNNER_TEMP}/graalvm")"
           echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
           echo "$home/bin" >> "$GITHUB_PATH"
+      - name: "Setup: Static Libs"
+        run: |
+          set -euo pipefail
+          mkdir "$GRAALVM_HOME/lib/static/linux-amd64/cosmo"
+          wget -q https://static.elideusercontent.com/cosmogvm/25.2i/static-libs-linux-x64.tar.gz
+          tar -xzvf static-libs-linux-x64.tar.gz
+          cp -fvr jdk-25.0.4/lib/* "$GRAALVM_HOME/lib/static/linux-amd64/cosmo/"
+      - name: "Setup: Cosmo"
+        run: |
+          set -euo pipefail
+          mkdir -p cosmocc
+          cd cosmocc
+          wget -q https://cosmo.zip/pub/cosmocc/cosmocc.zip
+          unzip cosmocc.zip
+          echo "$PWD/bin" >> "$GITHUB_PATH"
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -238,39 +206,12 @@ jobs:
 
           madura --version || rc=1
           madura --release 21 tests/smoke/simple/Hello.java -d "${out}21" || rc=1
-
-          exit "$rc"
-      - name: "Test: glibc Floor"
-        # The distribution has to run on older hosts than the one that built it.
-        # A C23-default compiler silently lifts this floor via `__isoc23_*`, so
-        # it is checked rather than assumed.
-        #
-        # Nothing to check on Mach-O: there is no glibc, and the deployment
-        # target is what bounds compatibility there instead.
-        if: runner.os == 'Linux'
-        env:
-          FLOOR: ${{ inputs.glibc_floor }}
-        run: |
-          set -euo pipefail
-          rc=0
-          for f in ./target/dist/madura; do
-            highest="$(objdump -T "$f" \
-              | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
-              | sed 's/GLIBC_//' \
-              | sort -uV \
-              | tail -1)"
-            printf '%-40s needs glibc %s\n' "$(basename "$f")" "$highest"
-            if [ "$(printf '%s\n%s\n' "$FLOOR" "$highest" | sort -V | tail -1)" != "$FLOOR" ]; then
-              echo "::error::$(basename "$f") needs glibc $highest, above the $FLOOR floor"
-              rc=1
-            fi
-          done
           exit "$rc"
       - name: "Test: Smoke"
         run: bun test
       - name: "Report: Distribution Size"
         env:
-          TARGET: ${{ inputs.os }}-${{ inputs.arch }}
+          TARGET: cosmo-universal
         run: |
           {
             echo "### Distribution ($TARGET)"
@@ -283,12 +224,12 @@ jobs:
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: madura-dist-${{ inputs.os }}-${{ inputs.arch }}
+          name: madura-dist-cosmo-universal
           # Both compressions ship as release assets; the uncompressed `.tar` is
           # deliberately left behind.
           path: |
-            target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.gz
-            target/madura-${{ inputs.os }}-${{ inputs.arch }}.tar.xz
+            target/madura-cosmo-universal.tar.gz
+            target/madura-cosmo-universal.tar.xz
           if-no-files-found: error
           retention-days: 7
       - name: "Report: Smoke Tests → Codecov"

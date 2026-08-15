@@ -19,33 +19,16 @@ dest="${1:?usage: setup-graalvm.sh <install-dir>}"
 # line changes it and fails here rather than silently swapping the toolchain;
 # refresh the affected hash when that happens.
 line="25i2"
-expect_version="25.2.4"
+expect_version="25.2.4-dev"
 
 # Where the JDK home sits inside the extracted tree. Linux unpacks it at the
 # root; macOS ships a framework bundle, so the home is nested under Contents.
 home_suffix=""
 
-case "$(uname -s)/$(uname -m)" in
-    Linux/x86_64)
-        platform="linux-x64"
-        checksum="7100d99cbfec68b03b669cc60c7e8592bbcda1732e8eaebc460fe0b75849a894"
-        ;;
-    Linux/aarch64 | Linux/arm64)
-        platform="linux-aarch64"
-        checksum="0bc65f9c36ae77bd83aad46a2b4de4b0ec97da1b4ac83fedb59e19f868873dee"
-        ;;
-    Darwin/arm64)
-        platform="macos-aarch64"
-        checksum="1b5937aa3076707459cfc815a1699761f943d2d1c9cbe03388e36d5e47eb27c3"
-        home_suffix="/Contents/Home"
-        ;;
-    *)
-        echo "setup-graalvm: unsupported platform $(uname -s)/$(uname -m)" >&2
-        exit 1
-        ;;
-esac
+platform="linux-x64"
+checksum="294c31d8998fc1d672bd038a6276614abd17ef88e1c40cec793574c7dd3af144"
 
-url="https://gds.oracle.com/download/graal/$line/latest/graalvm-jdk-$line-25_${platform}_bin.tar.gz"
+url="https://static.elideusercontent.com/cosmogvm/25.2i/graalvm-ce-25.2.4-dev-linux-x86_64.tar.gz"
 archive="$(mktemp -t graalvm-XXXXXX.tar.gz)"
 trap 'rm -f "$archive"' EXIT
 
