@@ -28,7 +28,9 @@ fi
 rm -rf "$dest"
 mkdir -p "$dest"
 unzip "$archive" -d "$dest"
+ls "$dest"
 
 home="$dest/cosmocc"
 echo "setup-cosmocc: at $home" >&2
-echo "$home"
+echo "COSMO_HOME=$home" >> "$GITHUB_ENV"
+echo "$home/bin" >> "$GITHUB_PATH"
