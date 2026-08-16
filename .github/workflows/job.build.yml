@@ -234,7 +234,7 @@ jobs:
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: madura-dist-cosmo-universal
+          name: madura-cosmo-amd64
           # Both compressions ship as release assets; the uncompressed `.tar` is
           # deliberately left behind.
           path: |
