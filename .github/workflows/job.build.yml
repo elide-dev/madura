@@ -98,21 +98,10 @@ jobs:
           home="$(./scripts/setup-graalvm.sh "${RUNNER_TEMP}/graalvm")"
           echo "GRAALVM_HOME=$home" >> "$GITHUB_ENV"
           echo "$home/bin" >> "$GITHUB_PATH"
-      - name: "Setup: Static Libs"
-        run: |
-          set -euo pipefail
-          mkdir "$GRAALVM_HOME/lib/static/linux-amd64/cosmo"
-          wget -q https://static.elideusercontent.com/cosmogvm/25.2i/static-libs-linux-x64.tar.gz
-          tar -xzvf static-libs-linux-x64.tar.gz
-          cp -fvr jdk-25.0.4/lib/* "$GRAALVM_HOME/lib/static/linux-amd64/cosmo/"
       - name: "Setup: Cosmo"
         run: |
           set -euo pipefail
-          mkdir -p cosmocc
-          cd cosmocc
-          wget -q https://cosmo.zip/pub/cosmocc/cosmocc.zip
-          unzip cosmocc.zip
-          echo "$PWD/bin" >> "$GITHUB_PATH"
+          home="$(./scripts/setup-cosmocc.sh "${RUNNER_TEMP}/cosmo")"
       - name: "Setup: Toolchains (mise)"
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
         env:
@@ -149,7 +138,14 @@ jobs:
         # (platform metadata), then `make-dist.sh` (stages both, builds
         # tarballs). JLINK is pinned to JAVA_HOME so the shipped metadata is
         # openjdk-25's, not the builder GraalVM's.
-        run: make all JLINK="$JAVA_HOME/bin/jlink"
+        run: |
+          ARCH=aarch64 make all JLINK="$JAVA_HOME/bin/jlink"
+          cp target/madura-linux-arm64.tar.* .
+          cp target/madura-linux-arm64/madura ./madura.aarch64
+          make clean
+          ARCH=x86_64 make all JLINK="$JAVA_HOME/bin/jlink"
+          cp target/madura-linux-amd64.tar.* .
+          cp target/madura-linux-amd64/madura ./madura.x86_64
       - name: "Test: Smoke Compile"
         # Proves the uploaded artifact is a working, hermetic compiler: both the
         # builder GraalVM and JAVA_HOME are removed, so the shipped
@@ -209,6 +205,20 @@ jobs:
           exit "$rc"
       - name: "Test: Smoke"
         run: bun test
+      - name: "build cosmo APE"
+        run: |
+          "$COSMO_HOME/bin/fixupobj" madura.x86_64
+          "$COSMO_HOME/bin/fixupobj" madura.aarch64
+          "$COSMO_HOME/bin/apelink" \
+              -l "$COSMO_HOME/bin/ape-x86_64.elf" \
+              -l "$COSMO_HOME/bin/ape-aarch64.elf" \
+              -M "$COSMO_HOME/bin/ape-m1.c" \
+              -o "madura.com" \
+              madura.x86_64 madura.aarch64
+          cp madura.com target/madura-linux-amd64/
+          cd target/madura-linux-amd64
+          zip -r madura-cosmo.zip madura.com lib/
+          mv madura-cosmo.zip ../../
       - name: "Report: Distribution Size"
         env:
           TARGET: cosmo-universal
@@ -217,19 +227,39 @@ jobs:
             echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/dist/madura target/dist/lib/modules "target/madura-$TARGET".tar.* 2>/dev/null
+            du -h target/madura-linux-amd64/madura.com target/dist/lib/modules madura-cosmo.zip 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: "Artifact: Distribution"
+      - name: "Artifact: Distribution (amd64)"
+        if: inputs.artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madura-cosmo-amd64
+          # Both compressions ship as release assets; the uncompressed `.tar` is
+          # deliberately left behind.
+          path: |
+            madura-linux-amd64.tar.gz
+            madura-linux-amd64.tar.xz
+          if-no-files-found: error
+          retention-days: 7
+      - name: "Artifact: Distribution (arm64)"
+        if: inputs.artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: madura-cosmo-arm64
+          # Both compressions ship as release assets; the uncompressed `.tar` is
+          # deliberately left behind.
+          path: |
+            madura-linux-arm64.tar.gz
+            madura-linux-arm64.tar.xz
+          if-no-files-found: error
+          retention-days: 7
+      - name: "Artifact: Distribution (cosmo)"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: madura-dist-cosmo-universal
-          # Both compressions ship as release assets; the uncompressed `.tar` is
-          # deliberately left behind.
-          path: |
-            target/madura-cosmo-universal.tar.gz
-            target/madura-cosmo-universal.tar.xz
+          path: madura-cosmo.zip
           if-no-files-found: error
           retention-days: 7
       - name: "Report: Smoke Tests → Codecov"

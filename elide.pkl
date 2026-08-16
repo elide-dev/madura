@@ -14,6 +14,13 @@ local gc = "serial"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
 
+local arch = read?("env:ARCH") ?? "x86_64"
+local archAlias = if (arch != "x86_64") arch else "amd64"
+local cosmoHome = read?("env:COSMO_HOME") ?? "./cosmocc"
+local graalLibDir = "\(cosmoHome)/graal-libs/\(arch)"
+local graalCacheDir = "\(cosmoHome)/graal-caps/\(arch)"
+local labsjdkLibDir = "\(cosmoHome)/labsjdk-libs/\(arch)"
+
 jvm {
   main = entry
   target = jdkTarget
@@ -118,6 +125,10 @@ artifacts {
       flags {
         "--verbose"
         "--libc=cosmo"
+        "-H:TargetPlatform=linux-\(archAlias)"
+        "-H:CLibraryPath=\(graalLibDir),\(labsjdkLibDir)"
+        "-H:+UseCAPCache"
+        "-H:CAPCacheDir=\(graalCacheDir)"
         "-march=compatibility"
         "--gc=\(gc)"
         "--exact-reachability-metadata"

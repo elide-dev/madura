@@ -26,9 +26,9 @@ expect_version="25.2.4-dev"
 home_suffix=""
 
 platform="linux-x64"
-checksum="294c31d8998fc1d672bd038a6276614abd17ef88e1c40cec793574c7dd3af144"
+checksum="c420fdfe510baa353290267e53821edf23f6e47127587b7ff0ee6ff7c288f704"
 
-url="https://static.elideusercontent.com/cosmogvm/25.2i/graalvm-ce-25.2.4-dev-linux-x86_64.tar.gz"
+url="https://static.elideusercontent.com/cosmogvm/25.2i-r2/graalvm-ce-25.2.4-dev-linux-x86_64.tar.gz"
 archive="$(mktemp -t graalvm-XXXXXX.tar.gz)"
 trap 'rm -f "$archive"' EXIT
 
