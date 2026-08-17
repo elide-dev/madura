@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/elide-dev/madura/compare/v1.1.0...v1.2.0) (2026-08-17)
+
+
+### Features
+
+* adopt `--libc=cosmo` ([#10](https://github.com/elide-dev/madura/issues/10)) ([52f1cc5](https://github.com/elide-dev/madura/commit/52f1cc57c7cd44b74b834dd093a7b0532a2adc25))
+
 ## [1.1.0](https://github.com/elide-dev/madura/compare/v1.0.1...v1.1.0) (2026-08-11)
 
 
