@@ -3,7 +3,8 @@ import "elide:Sources.pkl" as Sources
 import "elide:Jvm.pkl" as Jvm
 import "elide:NativeImage.pkl" as NativeImage
 
-name = "madura-javac"
+name = "madura"
+version = "1.1.0"
 
 local jdkTarget = 25
 local kotlinTarget = "2.4"
@@ -12,6 +13,13 @@ local truffleTarget = "25.2.4"
 local gc = "serial"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
+
+local arch = read?("env:ARCH") ?? "x86_64"
+local archAlias = if (arch != "x86_64") arch else "amd64"
+local cosmoHome = read?("env:COSMO_HOME") ?? "./cosmocc"
+local graalLibDir = "\(cosmoHome)/graal-libs/\(arch)"
+local graalCacheDir = "\(cosmoHome)/graal-caps/\(arch)"
+local labsjdkLibDir = "\(cosmoHome)/labsjdk-libs/\(arch)"
 
 jvm {
   main = entry
@@ -115,11 +123,15 @@ artifacts {
       optimization = "2"
 
       flags {
+        "--verbose"
+        "--libc=cosmo"
+        "-H:TargetPlatform=linux-\(archAlias)"
+        "-H:CLibraryPath=\(graalLibDir),\(labsjdkLibDir)"
+        "-H:+UseCAPCache"
+        "-H:CAPCacheDir=\(graalCacheDir)"
         "-march=compatibility"
         "--gc=\(gc)"
-        "--emit=build-report"
         "--exact-reachability-metadata"
-        "--enable-sbom=cyclonedx,export"
         "-R:MinHeapSize=32m"
         "-R:MaxHeapSize=1g"
         "-H:+UnlockExperimentalVMOptions"

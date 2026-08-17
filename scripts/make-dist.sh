@@ -14,10 +14,11 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist="$repo/target/dist"
 image="$repo/.dev/artifacts/native-image/madura"
 jdkroot="$repo/target/jdkroot"
+machine="${ARCH:-$(uname -m)}"
 
 # The distribution is a native binary plus platform metadata, so the tarball is
 # named for the machine that produced it (Debian-style arch).
-case "$(uname -m)" in
+case "$machine" in
     x86_64) arch="amd64" ;;
     aarch64 | arm64) arch="arm64" ;;
     *)
