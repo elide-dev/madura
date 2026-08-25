@@ -10,6 +10,7 @@ local jdkTarget = 25
 local kotlinTarget = "2.4"
 local kotlinVersion = "2.4.0"
 local truffleTarget = "25.2.4"
+local cosmo = true
 local gc = "serial"
 local pkg = "dev.elide.jvm"
 local entry = "\(pkg).JavacInvoker"
@@ -124,11 +125,6 @@ artifacts {
 
       flags {
         "--verbose"
-        "--libc=cosmo"
-        "-H:TargetPlatform=linux-\(archAlias)"
-        "-H:CLibraryPath=\(graalLibDir),\(labsjdkLibDir)"
-        "-H:+UseCAPCache"
-        "-H:CAPCacheDir=\(graalCacheDir)"
         "-march=compatibility"
         "--gc=\(gc)"
         "--exact-reachability-metadata"
@@ -157,6 +153,14 @@ artifacts {
         "-H:-UnlockExperimentalVMOptions"
         "-J--enable-native-access=org.graalvm.truffle"
         "-J--add-exports=jdk.graal.compiler/jdk.graal.compiler.lir.phases=ALL-UNNAMED"
+
+        when (cosmo) {
+          "--libc=cosmo"
+          "-H:TargetPlatform=linux-\(archAlias)"
+          "-H:CLibraryPath=\(graalLibDir),\(labsjdkLibDir)"
+          "-H:+UseCAPCache"
+          "-H:CAPCacheDir=\(graalCacheDir)"
+        }
       }
       classInit {
         buildtime {
