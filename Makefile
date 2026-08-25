@@ -29,7 +29,7 @@ build: target/dist  ## Build the madura distribution.
 
 test: build  ## Run all tests.
 	@echo "Running madura tests..."
-	$(RULE)$(ELIDE) test
+	$(RULE)$(ELIDE) test dev
 	$(RULE)$(BUN) test
 
 clean:  ## Clean built targets.
