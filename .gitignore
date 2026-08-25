@@ -1,3 +1,4 @@
+.DS_Store
 /target
 .dev/artifacts
 .dev/dependencies
