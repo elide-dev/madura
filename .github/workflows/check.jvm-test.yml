@@ -95,7 +95,7 @@ jobs:
         run: elide install --ecosystems maven --fresh
       - name: "Test: JVM"
         id: testsuite
-        run: elide test --coverage
+        run: elide test --coverage dev
       - name: "Report: Coverage → Codecov"
         # The JaCoCo report `elide.pkl` asks for. There is no test-results
         # upload beside it: `elide test` emits coverage only, no JUnit XML.
