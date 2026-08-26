@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/elide-dev/madura/compare/v1.1.0...v1.2.0) (2026-08-26)
+
+
+### Features
+
+* adopt `--libc=cosmo` ([#10](https://github.com/elide-dev/madura/issues/10)) ([52f1cc5](https://github.com/elide-dev/madura/commit/52f1cc57c7cd44b74b834dd093a7b0532a2adc25))
+* **dist:** install methods, licensing, and repo docs ([#28](https://github.com/elide-dev/madura/issues/28)) ([2c76731](https://github.com/elide-dev/madura/commit/2c767314757e76c5862c80ba665387c79ee26f6b))
+
+
+### Bug Fixes
+
+* **ci:** attach cosmo release assets; anchor draft releases to a tag ([#14](https://github.com/elide-dev/madura/issues/14)) ([db2f86d](https://github.com/elide-dev/madura/commit/db2f86de2cf6fd68879b8110a79157214e74cb74))
+* local non-cosmo builds ([b8446c5](https://github.com/elide-dev/madura/commit/b8446c5c8c7d08d14c229e330d9160dbf37cb9fd))
+* test jvm on elide ([5f4bb25](https://github.com/elide-dev/madura/commit/5f4bb25afffcb9b0354c414ead71f634ea48f769))
+
 ## [1.1.0](https://github.com/elide-dev/madura/compare/v1.0.1...v1.1.0) (2026-08-11)
 
 
