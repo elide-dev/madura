@@ -18,10 +18,24 @@ name: "Job - Release"
 # draft rather than a published release advertising binaries that do not
 # exist. `draft: true` in release-please-config.json is the other half of this.
 #
+# `draft: true` needs `force-tag-creation: true` beside it, and the pairing is
+# not optional. GitHub does not create a tag ref for a draft release — the tag
+# materializes at publish — so if this job fails before the publish step, the
+# manifest names a version with no anchor in git. release-please's next run then
+# matches zero releases (a draft's tagName does not even survive
+# `TagName.parse`), concludes it needs to bootstrap, and rescans history back to
+# `bootstrap-sha`. That is how v1.2.0's failed asset upload produced a release
+# PR proposing 1.0.0: the unbounded rescan swept commit 2bcb58b back into scope,
+# and a `Release-As:` footer overrides the computed bump outright.
+# `force-tag-creation` pushes `refs/tags/<tag>` before creating the release, so
+# the anchor exists no matter which later step fails. `bootstrap-sha` is pinned
+# to v1.1.0's commit for the same reason: it caps the blast radius of a
+# bootstrap to commits after that footer.
+#
 # The second half consumes artifacts rather than rebuilding: the caller runs the
-# build matrix first and passes its result in, so a release ships exactly the
-# binaries that were smoke-tested and glibc-checked, and nothing is compiled
-# twice. That is also why this runs from `on.push.yml` rather than on a
+# build job first and passes its result in, so a release ships exactly the
+# binary that was smoke-tested, and nothing is compiled twice. That is also why
+# this runs from `on.push.yml` rather than on a
 # `release: published` trigger — by then the run holding the artifacts is over.
 #
 # Do NOT add `package-name` to release-please-config.json (the schema forbids
@@ -106,9 +120,11 @@ jobs:
           disable-sudo: true
           egress-policy: audit
       - name: "Setup: Distributions"
-        # Artifacts from this run: the build matrix uploaded one per platform.
-        # The merge-multiple flatten is what lets a single download step collect
-        # every `${prefix}-*` artifact into one directory. Tarball names are
+        # Artifacts from this run, filtered by prefix: the build job uploads the
+        # per-arch ELF tarballs without `madura-dist-`, so only release
+        # candidates are fetched and nothing is downloaded to be ignored. The
+        # merge-multiple flatten is what lets a single download step collect
+        # every `${prefix}-*` artifact into one directory. Archive names are
         # unique across platforms, so flattening cannot collide.
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -118,7 +134,7 @@ jobs:
       - name: "Release: Stage Assets"
         # The tarballs are built with an unversioned name so the benchmark
         # pipeline can glob them; release assets are renamed to carry the
-        # version, because a downloaded `madura-cosmo-universal.tar.gz` is
+        # version, because a downloaded `madura-cosmo-universal.zip` is
         # indistinguishable from every other release once it is on disk.
         env:
           VERSION: ${{ needs.release-please.outputs.version }}
@@ -133,7 +149,7 @@ jobs:
             os="${target%%/*}"
             arch="${target##*/}"
             found=0
-            for ext in tar.gz tar.xz; do
+            for ext in tar.gz tar.xz zip; do
               src="dist-artifacts/madura-${os}-${arch}.${ext}"
               if [ -f "$src" ]; then
                 cp "$src" "release-assets/madura-${VERSION}-${os}-${arch}.${ext}"
@@ -145,7 +161,15 @@ jobs:
               rc=1
             fi
           done < <(echo "$TARGETS" | jq -r '.[] | "\(.os)/\(.arch)"')
-          [ "$rc" = 0 ] || exit "$rc"
+          if [ "$rc" != 0 ]; then
+            # Without this the only clue is the target name, while the actual
+            # mismatch is always between the file name the build job wrote and
+            # the `madura-${os}-${arch}.${ext}` pattern above.
+            echo "::group::contents of dist-artifacts"
+            ls -la dist-artifacts
+            echo "::endgroup::"
+            exit "$rc"
+          fi
 
           # Checksums are generated over the final names, from inside the
           # directory, so the file verifies with a bare `sha256sum -c`.
