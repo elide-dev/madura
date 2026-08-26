@@ -16,10 +16,16 @@ name: "Job - Build"
 # drops the executable bit, so shipping the binary directly would produce a
 # non-executable file on the other side.
 #
-# `os` must match the runner, and matches what `make-dist.sh` derives from
-# `uname -s` — that is the name in every tarball and artifact this job produces.
-# Two steps are ELF-specific and are skipped off Linux: the glibc floor check,
-# and harden-runner (which only instruments Ubuntu runners).
+# This job produces three artifacts, and exactly one is a release candidate.
+# `make-dist.sh` derives `madura-$os-$arch` from `uname -s` plus `$ARCH`, so the
+# per-arch ELF tarballs are `madura-linux-{amd64,arm64}` and the fused APE
+# bundle is `madura-cosmo-universal`. `job.release.yml` downloads
+# `madura-dist-*` and stages whatever its `targets` names, so that prefix is the
+# opt-in — only the APE carries it. The per-arch tarballs exist because
+# `apelink` needs both native images; they stay uploaded for debugging and
+# benchmarking, and are deliberately not release assets.
+#
+# harden-runner is skipped off Linux: it only instruments Ubuntu runners.
 
 on:
   workflow_call:
@@ -205,8 +211,20 @@ jobs:
           exit "$rc"
       - name: "Test: Smoke"
         run: bun test
-      - name: "build cosmo APE"
+      - name: "Build: Cosmo APE"
+        # apelink fuses the two per-arch native images into one actually-portable
+        # executable. The bundle mirrors every other dist — the binary beside its
+        # `lib/{modules,ct.sym}` — because madura resolves platform metadata
+        # binary-relative; only the container differs (zip, not tar), since an APE
+        # is already a zip and the `.com` name is what makes it run on Windows.
+        #
+        # The bundle name is a contract with `job.release.yml`: that job globs the
+        # flattened artifact directory for `madura-${os}-${arch}.${ext}`, so this
+        # file has to be `madura-cosmo-universal.zip`. Calling it
+        # `madura-cosmo.zip` is what made "Release Assets" fail with
+        # "no distribution artifact found for cosmo-universal".
         run: |
+          set -euo pipefail
           "$COSMO_HOME/bin/fixupobj" madura.x86_64
           "$COSMO_HOME/bin/fixupobj" madura.aarch64
           "$COSMO_HOME/bin/apelink" \
@@ -215,10 +233,16 @@ jobs:
               -M "$COSMO_HOME/bin/ape-m1.c" \
               -o "madura.com" \
               madura.x86_64 madura.aarch64
-          cp madura.com target/madura-linux-amd64/
-          cd target/madura-linux-amd64
-          zip -r madura-cosmo.zip madura.com lib/
-          mv madura-cosmo.zip ../../
+          # Unpacking has to yield a self-contained directory, not `madura.com`
+          # plus a bare `lib/` dropped into whatever the user's cwd happened to
+          # be — every tarball from `make-dist.sh` extracts to `madura-$os-$arch/`
+          # and this is the same layout.
+          dist="madura-cosmo-universal"
+          rm -rf "$dist"
+          mkdir -p "$dist"
+          cp madura.com "$dist/madura.com"
+          cp -R target/madura-linux-amd64/lib "$dist/lib"
+          zip -r "$dist.zip" "$dist"
       - name: "Report: Distribution Size"
         env:
           TARGET: cosmo-universal
@@ -227,39 +251,43 @@ jobs:
             echo "### Distribution ($TARGET)"
             echo
             echo '```'
-            du -h target/madura-linux-amd64/madura.com target/dist/lib/modules madura-cosmo.zip 2>/dev/null
+            du -h madura-cosmo-universal/madura.com target/dist/lib/modules madura-cosmo-universal.zip 2>/dev/null
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: "Artifact: Distribution (amd64)"
+      - name: "Artifact: Distribution (linux-amd64)"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: madura-cosmo-amd64
-          # Both compressions ship as release assets; the uncompressed `.tar` is
-          # deliberately left behind.
+          # Named for what is inside it. The absent `madura-dist-` prefix is
+          # load-bearing: it keeps this out of the release job's download, and
+          # out of releases, without depending on `targets` to exclude it.
+          name: madura-linux-amd64
+          # The uncompressed `.tar` is deliberately left behind.
           path: |
             madura-linux-amd64.tar.gz
             madura-linux-amd64.tar.xz
           if-no-files-found: error
           retention-days: 7
-      - name: "Artifact: Distribution (arm64)"
+      - name: "Artifact: Distribution (linux-arm64)"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: madura-cosmo-arm64
-          # Both compressions ship as release assets; the uncompressed `.tar` is
-          # deliberately left behind.
+          name: madura-linux-arm64
+          # The uncompressed `.tar` is deliberately left behind.
           path: |
             madura-linux-arm64.tar.gz
             madura-linux-arm64.tar.xz
           if-no-files-found: error
           retention-days: 7
-      - name: "Artifact: Distribution (cosmo)"
+      - name: "Artifact: Distribution (cosmo-universal)"
         if: inputs.artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          # The `madura-dist-` prefix marks the release candidate; the file
+          # inside must be `madura-<os>-<arch>.<ext>` for the `cosmo/universal`
+          # entry in `job.release.yml`'s `targets` to find it.
           name: madura-dist-cosmo-universal
-          path: madura-cosmo.zip
+          path: madura-cosmo-universal.zip
           if-no-files-found: error
           retention-days: 7
       - name: "Report: Smoke Tests → Codecov"
