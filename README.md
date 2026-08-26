@@ -26,10 +26,61 @@ The result is a very fast check cycle, no daemon needed:
 
 ## Getting Started
 
-Install Madura using any of the following methods:
+Every distribution is the same two things — the `madura` binary and the `lib/` directory it reads
+platform metadata from — so whichever method you pick, you get a self-contained compiler with no
+JDK, no `JAVA_HOME`, and no daemon.
+
+### Homebrew
+
+```bash
+brew tap elide-dev/elide
+brew install madura
 ```
-tbd
+
+### mise
+
+```bash
+mise use -g "github:elide-dev/madura[asset_pattern=madura-{{version}}-cosmo-universal.zip,rename_exe=madura]"
 ```
+
+...or, in your project's `mise.toml`:
+
+```toml
+[tools."github:elide-dev/madura"]
+version = "latest"
+asset_pattern = "madura-{{ version }}-cosmo-universal.zip"
+rename_exe = "madura"
+```
+
+> The release ships one asset for every platform — an [Actually Portable
+> Executable](https://justine.lol/ape.html) — so `asset_pattern` names it directly instead of
+> letting mise guess from an OS/arch suffix that isn't there. `rename_exe` drops the `.com`
+> suffix, which only matters on Windows.
+
+### Docker
+
+```bash
+docker run --rm -v "$PWD:/work" ghcr.io/elide-dev/madura:latest check ./some/java/Code.java
+```
+
+The image is `FROM scratch` — the binary, its platform metadata, and nothing else — for
+`linux/amd64` and `linux/arm64`. It runs as uid `65532` with `/work` as the working directory, and
+the entrypoint _is_ `madura`, so arguments are passed exactly as they would be on the command
+line. Tags: `latest`, the released `1.2.3` and `1.2` lines, `edge` for the tip of `main`, and an
+immutable `sha-<commit>` for every build.
+
+### Manual download
+
+```bash
+gh release download -R elide-dev/madura --pattern 'madura-*-cosmo-universal.zip'
+unzip madura-*-cosmo-universal.zip
+./madura-cosmo-universal/madura.com --version
+```
+
+The archive extracts to `madura.com` beside `lib/`; move the pair anywhere and symlink the binary
+onto your `PATH` — `madura` resolves its metadata through symlinks, so a launcher in
+`/usr/local/bin` works fine. The same file runs on macOS, Linux and Windows, on x86_64 and arm64;
+the `.com` suffix is what makes Windows execute it, and can be dropped everywhere else.
 
 ### Usage
 
@@ -87,3 +138,21 @@ The compiler entrypoint is Kotlin (`dev.elide.jvm.JavacInvoker`), built directly
 **(4) The distribution is hermetic.**
 
 The dist ships the binary beside its `lib/{modules,ct.sym}`, so no JDK or `JAVA_HOME` is required at runtime.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the build prerequisites (they are not the usual
+ones — `native-image` and `jlink` come from *different* JDKs), the test regime, and how releases
+are cut. Participation is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+## License
+
+`madura`'s own source code is [0BSD](./LICENSE): public-domain-equivalent, no attribution
+required, do whatever you want with it.
+
+The **binaries** are a different story, because `madura` _is_ `javac`: the shipped executable is
+an ahead-of-time compilation of OpenJDK code, and `lib/{modules,ct.sym}` is OpenJDK platform
+metadata. Those parts remain under GPL-2.0 **with the Classpath Exception** — the exception is
+precisely what permits this combination — alongside Apache-2.0 (Kotlin stdlib) and ISC
+(Cosmopolitan Libc) components. [NOTICE.md](./NOTICE.md) enumerates every one of them, with
+upstream sources.
