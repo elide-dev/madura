@@ -1,0 +1,167 @@
+name: "Job - Docker"
+
+# Builds (and optionally publishes) the madura container image to GHCR.
+#
+# This job never compiles anything: it consumes the per-arch distributions the
+# build job already produced *in the same run*, so the image ships exactly the
+# binaries that were smoke-tested a few steps earlier. That is also why it takes
+# the artifacts as an input rather than triggering on `release: published` —
+# by then the run holding them is over.
+#
+# `madura-linux-{amd64,arm64}` are the two ELF distributions. They are the only
+# artifacts that work here: the `madura-dist-cosmo-universal` release asset is an
+# Actually Portable Executable, and an APE relies on a shell to re-exec itself
+# the first time. A `scratch` image has no shell, so the APE would fail with
+# "exec format error" while the plain ELF binaries — statically linked against
+# Cosmopolitan Libc — run with nothing underneath them at all.
+#
+# Multi-platform without emulation: the Dockerfile's only per-arch step is
+# `COPY madura-linux-${TARGETARCH}/`, and `TARGETARCH` uses the same amd64/arm64
+# spelling `make-dist.sh` derives from `uname -m`. buildx assembles the manifest
+# list from two COPY-only builds, so no QEMU is involved and neither leg can be
+# slow enough to matter.
+
+on:
+  workflow_call:
+    inputs:
+      publish:
+        description: "Push the image to GHCR (false = build only, for PR validation)"
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: "Release version to tag (empty = untagged edge build)"
+        required: false
+        default: ""
+        type: string
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push the image to GHCR (false = build only)"
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: "Release version to tag (empty = untagged edge build)"
+        required: false
+        default: ""
+        type: string
+
+# No `permissions:` block, at either level, and that is deliberate: a called
+# workflow may never request more than the calling job granted it, and the two
+# callers need different things. `on.push.yml` grants `packages: write` because
+# it publishes; `on.pr.yml` grants `contents: read` alone because it does not.
+# Declaring `packages: write` here would make the PR call fail validation before
+# a single step ran, so the grant belongs to the caller and the token this job
+# gets is exactly what that caller handed over.
+
+jobs:
+  image:
+    name: "Container Image"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+      - name: "Setup: Distributions"
+        # Both ELF tarballs, flattened into one directory. Names are unique per
+        # arch, so `merge-multiple` cannot collide.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: madura-linux-*
+          path: dist-artifacts
+          merge-multiple: true
+      - name: "Setup: Build Context"
+        # The Dockerfile expects extracted distributions, one directory per arch,
+        # at the root of the context. Keeping the context to exactly those two
+        # directories is what makes `COPY` the whole build.
+        run: |
+          set -euo pipefail
+          ctx=target/docker
+          rm -rf "$ctx"
+          mkdir -p "$ctx"
+          for arch in amd64 arm64; do
+            src="dist-artifacts/madura-linux-${arch}.tar.gz"
+            if [ ! -f "$src" ]; then
+              echo "::error::missing distribution ${src}"
+              ls -la dist-artifacts || true
+              exit 1
+            fi
+            tar -xzf "$src" -C "$ctx"
+            test -x "$ctx/madura-linux-${arch}/madura"
+            test -f "$ctx/madura-linux-${arch}/lib/modules"
+          done
+          du -sh "$ctx"/*
+      - name: "Setup: Buildx"
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: "Setup: GHCR Login"
+        if: inputs.publish
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Build: Image Tags"
+        # Tags are computed here rather than with docker/metadata-action because
+        # the interesting input is not the git ref but whether release-please cut
+        # a release in this run: `version` is set only then, and only then do the
+        # semver and `latest` tags move. Every main build still gets an immutable
+        # `sha-` tag plus `edge`.
+        id: tags
+        env:
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY}"
+          tags="${image}:sha-${SHA:0:7}"
+          if [ -n "$VERSION" ]; then
+            # `1.2.3` and the `1.2` line, so a consumer can float on patches.
+            tags="${tags},${image}:${VERSION},${image}:${VERSION%.*},${image}:latest"
+          else
+            tags="${tags},${image}:edge"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "$tags" | tr ',' '\n'
+      - name: "Build: Image"
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: target/docker
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ inputs.publish }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # Attestations are attached to the pushed image; a PR build has no
+          # exporter to attach them to, so they are only requested when pushing.
+          provenance: ${{ inputs.publish && 'mode=max' || 'false' }}
+          sbom: ${{ inputs.publish }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ inputs.version || 'edge' }}
+      - name: "Report: Image Summary"
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          PUBLISHED: ${{ inputs.publish }}
+        run: |
+          {
+            echo "### Container image"
+            echo
+            if [ "$PUBLISHED" = "true" ]; then
+              echo "Pushed:"
+            else
+              echo "Built (not pushed):"
+            fi
+            echo
+            echo '```'
+            echo "$TAGS" | tr ',' '\n'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

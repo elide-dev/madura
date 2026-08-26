@@ -1,0 +1,21 @@
+# Review ownership for madura. The last matching pattern wins, so the catch-all
+# comes first and the load-bearing paths below it.
+#
+# GitHub only requests review from an owner with write access to this
+# repository; unknown users or teams are silently ignored, which is why this
+# file names people rather than a team that may not exist yet.
+
+* @sgammon
+
+# The distribution contract: what gets built, what ships beside the binary, and
+# how it is released. A mistake here is shipped software, not a broken build.
+/Makefile           @sgammon
+/elide.pkl          @sgammon
+/native-image/      @sgammon
+/scripts/           @sgammon
+/Dockerfile         @sgammon
+/.github/           @sgammon
+
+# Licensing and third-party obligations.
+/LICENSE            @sgammon
+/NOTICE.md          @sgammon

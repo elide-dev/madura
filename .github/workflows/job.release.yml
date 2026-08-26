@@ -62,6 +62,20 @@ on:
         default: >-
           [{"os": "cosmo", "arch": "universal"}]
         type: string
+    outputs:
+      # Surfaced so the caller can fan the release out to downstream installers
+      # (container tags, Homebrew) in the same run, without re-querying GitHub
+      # for what release-please already decided. `release_created` is `'true'`
+      # only on the run that merged the release PR; `version` is empty otherwise.
+      release_created:
+        description: "Whether release-please cut a release in this run"
+        value: ${{ jobs.release-please.outputs.release_created }}
+      version:
+        description: "Released version, without the `v` prefix"
+        value: ${{ jobs.release-please.outputs.version }}
+      tag_name:
+        description: "Released tag, e.g. `v1.2.0`"
+        value: ${{ jobs.release-please.outputs.tag_name }}
   workflow_dispatch:
     inputs:
       artifact_prefix:
@@ -210,3 +224,96 @@ jobs:
             cat release-assets/SHA256SUMS
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  homebrew:
+    name: "Homebrew Tap"
+    # A job of its own, named onto the `homebrew` environment, for two reasons:
+    # an environment secret is only visible to a job that declares the
+    # environment, and any protection rule on it (reviewers, wait timer) then
+    # gates *this* job alone. `assets` cannot carry the environment for the same
+    # reason in reverse — a pending approval there would stall the release
+    # itself. Note that the caller cannot declare it either: a job that invokes
+    # a reusable workflow accepts no `environment:` key, which is why the token
+    # is read here rather than passed in through `secrets:`.
+    #
+    # Runs after `assets`, which is what publishes the release: the formula
+    # points at a download URL that only resolves once the release is out of
+    # draft, so pushing it earlier would advertise a 404.
+    needs: [release-please, assets]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: homebrew
+    permissions:
+      contents: read # to check out the renderer and read the published release
+    steps:
+      - name: "Setup: Harden Runner"
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          disable-sudo: true
+          egress-policy: audit
+      - name: "Setup: Checkout"
+        # Only the formula renderer is needed; nothing else here touches the
+        # working tree.
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/homebrew-formula.sh
+      - name: "Homebrew: Render Formula"
+        # The digest comes from the release's own SHA256SUMS rather than from a
+        # local recomputation, so the formula can only ever describe the asset
+        # that was actually published. It is a few hundred bytes; the 40MB zip
+        # is never downloaded.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --clobber
+          asset="madura-${VERSION}-cosmo-universal.zip"
+          # SHA256SUMS is `<digest>  <name>`; the two-space separator makes $2
+          # the file name for both text and binary (`*name`) forms.
+          sha="$(awk -v f="$asset" '$2 == f || $2 == "*" f { print $1 }' SHA256SUMS)"
+          if [ -z "$sha" ]; then
+            echo "::error::no checksum for $asset in the release's SHA256SUMS"
+            cat SHA256SUMS
+            exit 1
+          fi
+          ./scripts/homebrew-formula.sh "$VERSION" "$sha" > madura.rb
+          echo "::group::rendered formula"
+          cat madura.rb
+          echo "::endgroup::"
+      - name: "Homebrew: Push to Tap"
+        # Deliberately fails rather than warning when the token is missing: the
+        # release is already out, so the only thing left to protect is the
+        # signal. A red job is re-runnable; a green one that quietly left the
+        # tap on the previous version is not noticed until a user installs it.
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+          TAP: elide-dev/homebrew-elide
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not set on the \`homebrew\` environment"
+            exit 1
+          fi
+
+          # The Contents API needs the blob sha of the file being replaced; its
+          # absence is the create case, not an error.
+          existing="$(gh api "/repos/$TAP/contents/Formula/madura.rb" --jq .sha 2>/dev/null || true)"
+          args=(
+            --method PUT
+            "/repos/$TAP/contents/Formula/madura.rb"
+            -f "message=madura $VERSION"
+            -f "content=$(base64 -w0 < madura.rb)"
+          )
+          if [ -n "$existing" ]; then
+            args+=(-f "sha=$existing")
+          fi
+          gh api "${args[@]}" --jq '.commit.html_url'
+          echo "- Homebrew tap updated: \`brew install elide-dev/elide/madura\` → $VERSION" >> "$GITHUB_STEP_SUMMARY"
