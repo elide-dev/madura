@@ -47,17 +47,19 @@ on:
         default: ""
         type: string
 
-permissions:
-  contents: read # to check out the Dockerfile
+# No `permissions:` block, at either level, and that is deliberate: a called
+# workflow may never request more than the calling job granted it, and the two
+# callers need different things. `on.push.yml` grants `packages: write` because
+# it publishes; `on.pr.yml` grants `contents: read` alone because it does not.
+# Declaring `packages: write` here would make the PR call fail validation before
+# a single step ran, so the grant belongs to the caller and the token this job
+# gets is exactly what that caller handed over.
 
 jobs:
   image:
     name: "Container Image"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read # to check out the Dockerfile
-      packages: write # to push to GHCR
     steps:
       - name: "Setup: Harden Runner"
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
