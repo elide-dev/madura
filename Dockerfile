@@ -45,10 +45,16 @@ WORKDIR /work
 # javac's: `docker run ... madura check Foo.java` reaches the CLI verbatim.
 ENTRYPOINT ["/opt/madura/madura"]
 
+# `licenses` is an SPDX license expression covering everything in the image, per
+# the OCI spec — not just the most restrictive term. `WITH` binds tighter than
+# `AND`, so the parentheses are redundant to a parser and load-bearing for a
+# human. The four terms are madura's own code, the Kotlin stdlib and Cosmopolitan
+# Libc linked into the binary, and the OpenJDK it is compiled from, which is also
+# what lib/{modules,ct.sym} is. NOTICE.md enumerates them with upstream sources.
 LABEL org.opencontainers.image.title="madura" \
       org.opencontainers.image.description="Smallest possible compliant Java toolchain" \
       org.opencontainers.image.source="https://github.com/elide-dev/madura" \
       org.opencontainers.image.documentation="https://github.com/elide-dev/madura#readme" \
       org.opencontainers.image.vendor="Elide" \
       org.opencontainers.image.base.name="scratch" \
-      org.opencontainers.image.licenses="0BSD AND GPL-2.0-only WITH Classpath-exception-2.0"
+      org.opencontainers.image.licenses="0BSD AND Apache-2.0 AND ISC AND (GPL-2.0-only WITH Classpath-exception-2.0)"

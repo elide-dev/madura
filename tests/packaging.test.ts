@@ -28,11 +28,28 @@ async function render(args: string[]): Promise<{ exitCode: number; stdout: strin
 test("the formula describes the release it was rendered for", async () => {
   const out = await render([VERSION, SHA]);
   expect(out.exitCode).toBe(0);
-  expect(out.stdout).toContain(`version "${VERSION}"`);
   expect(out.stdout).toContain(`sha256 "${SHA}"`);
   expect(out.stdout).toContain(
     `url "https://github.com/elide-dev/madura/releases/download/v${VERSION}/madura-${VERSION}-cosmo-universal.zip"`,
   );
+  // The URL is the *only* statement of the version: Homebrew scans it from
+  // there, and `brew audit --strict` rejects a `version` line that repeats what
+  // the URL already says. Re-adding one would pass style and fail audit on the
+  // tap, which is where nobody is watching.
+  expect(out.stdout).not.toContain("version \"");
+});
+
+test("rendering is silent, so nothing in the formula was shell-expanded", async () => {
+  // The heredoc that emits the formula is unquoted — it has to be, to
+  // interpolate the version, URL and checksum — so bash expands anything inside
+  // it that looks expandable. A backtick in a *comment* within that heredoc is
+  // run as a command and its output substituted, silently corrupting the
+  // formula: exit status stays 0, the result is still valid Ruby, and the only
+  // evidence is `command not found` on stderr. Which is why this asserts on
+  // stderr rather than on any particular line of output.
+  const out = await render([VERSION, SHA]);
+  expect(out.exitCode).toBe(0);
+  expect(out.stderr).toBe("");
 });
 
 test("the formula keeps the binary beside its platform metadata", async () => {
@@ -43,6 +60,23 @@ test("the formula keeps the binary beside its platform metadata", async () => {
   const out = await render([VERSION, SHA]);
   expect(out.stdout).toContain("libexec.install");
   expect(out.stdout).toContain('bin.install_symlink libexec/"madura.com" => "madura"');
+});
+
+test("the formula's license covers every license the binary carries", async () => {
+  // Homebrew's `license` field describes the installed files, and the installed
+  // files are a compound artifact: OpenJDK compiled ahead of time, with the
+  // Kotlin stdlib and Cosmopolitan Libc linked in. Listing only the most
+  // restrictive term would make the tap disagree with NOTICE.md, so every term
+  // is pinned here — the failure mode is silent metadata rot, not a broken
+  // install.
+  const out = await render([VERSION, SHA]);
+  for (const spdx of ["0BSD", "Apache-2.0", "ISC"]) {
+    expect(out.stdout).toContain(`"${spdx}"`);
+  }
+  expect(out.stdout).toContain('{ "GPL-2.0-only" => { with: "Classpath-exception-2.0" } }');
+  // `all_of`, not `any_of`: redistribution must satisfy all four, and the two
+  // read alike at a glance while meaning opposite things.
+  expect(out.stdout).toContain("license all_of: [");
 });
 
 test("the rendered formula is valid Ruby", async () => {

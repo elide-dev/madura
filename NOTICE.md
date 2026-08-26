@@ -15,7 +15,7 @@ A release archive contains exactly two things:
 
 | Path                        | What it is                                          | License                                        |
 | --------------------------- | --------------------------------------------------- | ---------------------------------------------- |
-| `madura` (or `madura.com`)  | native image of `jdk.compiler` + this repo's entrypoint | GPL-2.0-only WITH Classpath-exception-2.0, and 0BSD, and Apache-2.0 (see below) |
+| `madura` (or `madura.com`)  | native image of `jdk.compiler` + this repo's entrypoint | `GPL-2.0-only WITH Classpath-exception-2.0 AND 0BSD AND Apache-2.0 AND ISC` (see below) |
 | `lib/modules`, `lib/ct.sym` | `jlink`'d OpenJDK platform metadata (the jimage and release signatures) | GPL-2.0-only WITH Classpath-exception-2.0      |
 
 ## Third-party components
@@ -60,9 +60,12 @@ Licensed under the **Apache License 2.0** (SPDX: `Apache-2.0`).
 
 ### Cosmopolitan Libc
 
-The `cosmo-universal` distribution (`madura.com`) is linked against Cosmopolitan Libc and carries
-the Actually Portable Executable loader. Cosmopolitan is licensed under the **ISC license**;
-some vendored components within it carry their own permissive licenses, enumerated upstream.
+**Every** distribution is linked against Cosmopolitan Libc, not only the universal one: the
+native image is built with `--libc=cosmo` for every target, so the per-arch ELF binaries are
+statically linked against it too. The `cosmo-universal` distribution additionally carries the
+Actually Portable Executable loader, which is what lets one file run on macOS, Linux and Windows.
+Cosmopolitan is licensed under the **ISC license**; some vendored components within it carry
+their own permissive licenses, enumerated upstream.
 
 - Upstream source and licenses: <https://github.com/jart/cosmopolitan>
 

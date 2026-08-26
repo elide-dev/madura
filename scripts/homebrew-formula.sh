@@ -11,9 +11,15 @@
 # The third argument overrides the download URL, which is only useful for
 # testing the formula against a local artifact before a release exists:
 #
-#   scripts/homebrew-formula.sh 1.2.0 "$(shasum -a 256 dist.zip | cut -d' ' -f1)" \
-#       "file://$PWD/dist.zip" > madura.rb
+#   cp dist.zip "madura-1.2.0-cosmo-universal.zip"
+#   scripts/homebrew-formula.sh 1.2.0 "$(shasum -a 256 madura-1.2.0-cosmo-universal.zip | cut -d' ' -f1)" \
+#       "file://$PWD/madura-1.2.0-cosmo-universal.zip" > madura.rb
 #   brew install --formula ./madura.rb && brew test ./madura.rb
+#
+# The local copy has to keep the release file name, because the formula declares
+# no `version`: Homebrew scans it out of the URL, and `brew audit --strict`
+# rejects stating it twice. An override URL that does not carry the version
+# leaves Homebrew unable to determine one.
 #
 # One formula covers every platform because there is one asset: the release ships
 # an Actually Portable Executable, so the same `madura.com` runs on macOS and
@@ -35,13 +41,23 @@ class Madura < Formula
   desc "Smallest possible compliant Java toolchain"
   homepage "https://github.com/elide-dev/madura"
   url "${url}"
-  version "${version}"
+  # No version declaration: Homebrew scans 1.2.3 out of the URL above, and
+  # brew audit --strict flags stating it a second time as redundant.
   sha256 "${sha256}"
-  # madura's own code is 0BSD; the binary is an ahead-of-time compilation of
-  # OpenJDK's javac, which stays GPL-2.0 with the Classpath Exception. See
-  # NOTICE.md in the repository.
+  # Every license the installed files are subject to, which is what Homebrew's
+  # license field means -- not just the most restrictive one. madura's own code
+  # is 0BSD; the binary is an ahead-of-time compilation of OpenJDK's javac
+  # (GPL-2.0 with the Classpath Exception) that also links the Kotlin standard
+  # library (Apache-2.0) and Cosmopolitan Libc (ISC). all_of is the accurate
+  # relationship: redistributing the bottle means satisfying all four. See
+  # NOTICE.md in the repository. Note there are no backticks anywhere below this
+  # line: the heredoc is unquoted so that the version, URL and checksum
+  # interpolate, which means bash would run a backticked word as a command and
+  # substitute its output into the formula.
   license all_of: [
     "0BSD",
+    "Apache-2.0",
+    "ISC",
     { "GPL-2.0-only" => { with: "Classpath-exception-2.0" } },
   ]
 
