@@ -81,3 +81,23 @@ jobs:
     permissions:
       contents: write # to tag, release, and upload assets
       pull-requests: write # to open and update the release PR
+    # No `secrets:` block, and no `environment:` either — a reusable-workflow
+    # call accepts neither an environment nor inherited environment secrets. The
+    # tap token lives on the `homebrew` environment and is read by the job in
+    # job.release.yml that declares it.
+
+  docker:
+    name: "Docker"
+    # Downstream of both: the image is built from the artifacts `build` uploaded
+    # in this run, and its tags depend on whether `release` cut a version. On a
+    # plain main push that job reports no release and the image publishes as
+    # `edge` plus an immutable `sha-` tag.
+    needs: [build, release]
+    if: github.ref == 'refs/heads/main' && needs.build.result == 'success'
+    uses: ./.github/workflows/job.docker.yml
+    permissions:
+      contents: read # to check out the Dockerfile
+      packages: write # to push to GHCR
+    with:
+      publish: true
+      version: ${{ needs.release.outputs.version }}

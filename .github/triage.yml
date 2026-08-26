@@ -12,6 +12,9 @@ base: &base
   - "codecov.yml"
   - "release-please-config.json"
   - ".release-please-manifest.json"
+  # Packaging inputs. The image is assembled from the build job's artifacts, so
+  # a Dockerfile change has to rebuild the distribution to be validated at all.
+  - "Dockerfile"
 
 # The Kotlin entrypoint, its native-image configuration, and the tests that
 # exercise the assembled binary. Touching any of these rebuilds `madura` or

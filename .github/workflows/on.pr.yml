@@ -62,6 +62,18 @@ jobs:
     with:
       runner: ${{ matrix.runner }}
 
+  docker:
+    name: "Docker"
+    # Build-only: proves the Dockerfile still assembles from the artifacts this
+    # run produced. Nothing is pushed from a PR.
+    needs: [build]
+    if: needs.build.result == 'success'
+    uses: ./.github/workflows/job.docker.yml
+    permissions:
+      contents: read # to check out the Dockerfile
+    with:
+      publish: false
+
   test-jvm:
     name: "Test"
     needs: [triage]
@@ -75,21 +87,23 @@ jobs:
   gate:
     name: "Gate"
     if: always() && github.event.pull_request.draft == false
-    needs: [build, test-jvm]
+    needs: [build, test-jvm, docker]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         env:
           BUILD: ${{ needs.build.result }}
           TESTS: ${{ needs.test-jvm.result }}
+          DOCKER: ${{ needs.docker.result }}
         run: |
           echo "Build:    $BUILD"
           echo "Tests:    $TESTS"
+          echo "Docker:   $DOCKER"
 
           # `skipped` is a pass: triage decided the area was untouched. Only a
           # job that actually ran and did not succeed fails the gate.
           rc=0
-          for pair in "Build:$BUILD" "Tests:$TESTS"; do
+          for pair in "Build:$BUILD" "Tests:$TESTS" "Docker:$DOCKER"; do
             name="${pair%%:*}"
             result="${pair##*:}"
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
