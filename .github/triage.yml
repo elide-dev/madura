@@ -18,7 +18,7 @@ base: &base
 # changes what its test suites assert.
 jvm: &jvm
   - *base
-  - "src/*.kt"
+  - "src/**/*.kt"
   - "elide.pkl"
   - "native-image/**"
   - ".dev/elide.lock.v2.bin"

@@ -65,7 +65,9 @@ node_modules/:
 	@echo "+ Installing Maven dependencies..."
 	$(RULE)$(ELIDE) install --ecosystems maven
 
-IMAGE_SRCS := $(wildcard src/*.kt) elide.pkl $(wildcard native-image/*)
+# `wildcard` does not recurse, and the Kotlin sources sit under their package
+# directories, so the file list comes from `find`.
+IMAGE_SRCS := $(shell find src -name '*.kt') elide.pkl $(wildcard native-image/*)
 
 image: $(IMAGE)  ## Build the native-image binary.
 

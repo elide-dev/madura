@@ -78,15 +78,19 @@ kotlin {
   }
 }
 
+// Both roots mirror the Kotlin package (`dev/elide/jvm`) as directories, so the
+// globs recurse. JaCoCo names files by package, and Codecov resolves those
+// report paths against the repo tree by matching the trailing directory: with a
+// flat layout nothing resolves and the uploaded report is empty.
 sources {
   ["main"] = new Sources.SourceSetSpec {
     paths {
-      "src/*.kt"
+      "src/**/*.kt"
     }
   }
   ["test"] = new Sources.SourceSetSpec {
     paths {
-      "tests/*.kt"
+      "tests/**/*.kt"
     }
   }
 }
