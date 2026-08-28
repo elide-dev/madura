@@ -1,7 +1,5 @@
 # madura
 
-[![codecov](https://codecov.io/gh/elide-dev/madura/graph/badge.svg?token=dQmhOolA5k)](https://codecov.io/gh/elide-dev/madura)
-
 An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from JDK internals only.
 
 > [!WARNING]
