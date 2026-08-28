@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/elide-dev/madura/compare/v1.2.0...v1.2.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* register jar URL handler for reflection ([#30](https://github.com/elide-dev/madura/issues/30)) ([8425e26](https://github.com/elide-dev/madura/commit/8425e2615a5e5f9d9bce592edb30c9a18d3227a6))
+
 ## [1.2.0](https://github.com/elide-dev/madura/compare/v1.1.0...v1.2.0) (2026-08-26)
 
 
