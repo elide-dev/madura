@@ -1,4 +1,15 @@
 {
+  "reflection": [
+    {
+      "type": "sun.net.www.protocol.jar.Handler",
+      "methods": [
+        {
+          "name": "<init>",
+          "parameterTypes": []
+        }
+      ]
+    }
+  ],
   "resources": [
     {
       "glob": "META-INF/services/com.sun.source.util.Plugin"

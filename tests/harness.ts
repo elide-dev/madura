@@ -42,6 +42,9 @@ export const JAVAC = which("JAVAC_BIN", ["bin/javac"], "javac");
 /** The JVM that runs compiled output, resolved the same way. */
 export const JAVA = which("JAVA_BIN", ["bin/java"], "java");
 
+/** The JDK archiver used to assemble real classpath fixtures. */
+export const JAR = which("JAR_BIN", ["bin/jar"], "jar");
+
 function which(override: string, suffixes: string[], fallback: string): string {
   const explicit = process.env[override];
   if (explicit) return explicit;
