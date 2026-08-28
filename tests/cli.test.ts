@@ -9,7 +9,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { MADURA, REPO, run, type Run } from "./harness.ts";
+import { JAR, JAVAC, MADURA, REPO, run, status, type Run } from "./harness.ts";
 
 const HELLO = 'public class Hello { public static void main(String[] a) { System.out.println("hi"); } }';
 
@@ -49,6 +49,30 @@ test("passthrough (no subcommand) compiles like javac", async () => {
   const out = await run(MADURA, [join(dir, "Hello.java"), "-d", join(dir, "out")]);
   expect(out.exitCode).toBe(0);
   expect(existsSync(join(dir, "out/Hello.class"))).toBe(true);
+});
+
+test("classpath accepts classes from JARs", async () => {
+  const dir = workdir("jar-classpath");
+  const dependencyOut = join(dir, "dependency-out");
+  const dependencySource = join(dir, "Greeting.java");
+  const dependencyJar = join(dir, "greeting.jar");
+  const consumerSource = join(dir, "Hello.java");
+  const consumerOut = join(dir, "out");
+
+  writeFileSync(
+    dependencySource,
+    'public final class Greeting { public static String text() { return "hi"; } }',
+  );
+  expect(status(await run(JAVAC, ["-d", dependencyOut, dependencySource]))).toBe("exit 0");
+  expect(status(await run(JAR, ["--create", "--file", dependencyJar, "-C", dependencyOut, "."]))).toBe(
+    "exit 0",
+  );
+
+  writeFileSync(consumerSource, "public class Hello { String message = Greeting.text(); }");
+  const out = await run(MADURA, ["-cp", dependencyJar, "-d", consumerOut, consumerSource]);
+
+  expect(status(out)).toBe("exit 0");
+  expect(existsSync(join(consumerOut, "Hello.class"))).toBe(true);
 });
 
 test("compiles hermetically with JAVA_HOME unset", async () => {
