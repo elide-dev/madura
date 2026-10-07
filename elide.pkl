@@ -42,7 +42,6 @@ kotlin {
   toolchain = "embedded"
 
   features {
-    kapt = false
     kotlinx = false
     reflection = false
     defaultPlugins = false
