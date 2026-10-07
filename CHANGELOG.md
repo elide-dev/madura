@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/elide-dev/madura/compare/v1.2.1...v1.2.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* lock hk for CI toolchain setup ([8c4cb56](https://github.com/elide-dev/madura/commit/8c4cb56d8f3a2b14db3f047ba681ee100e9ce8ba))
+* update pkl manifest for new elide ([15e2b0c](https://github.com/elide-dev/madura/commit/15e2b0c2b499a7ba7eff508bd1de01ad47900235))
+
 ## [1.2.1](https://github.com/elide-dev/madura/compare/v1.2.0...v1.2.1) (2026-08-28)
 
 
