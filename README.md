@@ -1,5 +1,11 @@
 ![Madura](./docs/banner.png)
 
+[![Discord](https://img.shields.io/discord/1119121740161884252?b2&logo=discord&logoColor=white&label=Discord)](https://elide.dev/discord)
+![Java 25](https://img.shields.io/badge/-Java%2025-blue.svg?logo=openjdk&logoColor=white)
+[![CI](https://github.com/elide-dev/madura/actions/workflows/on.push.yml/badge.svg)](https://github.com/elide-dev/madura/actions/workflows/on.push.yml)
+[![codecov](https://codecov.io/gh/elide-dev/madura/graph/badge.svg?token=dQmhOolA5k)](https://codecov.io/gh/elide-dev/madura)
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//elide-dev/madura?utm_source=badge)
+
 An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from JDK internals only.
 
 > [!WARNING]
