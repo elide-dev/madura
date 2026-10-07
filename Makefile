@@ -74,7 +74,7 @@ image: $(IMAGE)  ## Build the native-image binary.
 
 $(IMAGE): $(IMAGE_SRCS)
 	@echo "+ Building madura native image..."
-	$(RULE)$(ELIDE) build --no-cache --release
+	$(RULE)$(ELIDE) build --no-cache
 
 jdkroot: $(JDKROOT)  ## Build the minimal jlink'd JDK metadata.
 

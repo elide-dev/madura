@@ -22,7 +22,17 @@ checksum = "sha256:364b4cf201970cd5c943390dd3e736b4256b14a0ac52d304f8fb4acfd6a1f
 url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-unknown-linux-gnu.tar.gz"
 signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
 
+[tools.aube."platforms.linux-x64-baseline"]
+checksum = "sha256:364b4cf201970cd5c943390dd3e736b4256b14a0ac52d304f8fb4acfd6a1fbd3"
+url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-unknown-linux-gnu.tar.gz"
+signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
+
 [tools.aube."platforms.linux-x64-musl"]
+checksum = "sha256:d69ab74a5e21f4dcaf5a41899a623114d6df77c11a170089ade86348bbc2b234"
+url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-unknown-linux-musl.tar.gz"
+signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
+
+[tools.aube."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:d69ab74a5e21f4dcaf5a41899a623114d6df77c11a170089ade86348bbc2b234"
 url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-unknown-linux-musl.tar.gz"
 signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
@@ -33,6 +43,11 @@ url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-aarc
 signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
 
 [tools.aube."platforms.windows-x64"]
+checksum = "sha256:f6399466cc0e0c2f52248b56477182d4857a8a02d518936b055a3a67f0f25f87"
+url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-pc-windows-msvc.zip"
+signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
+
+[tools.aube."platforms.windows-x64-baseline"]
 checksum = "sha256:f6399466cc0e0c2f52248b56477182d4857a8a02d518936b055a3a67f0f25f87"
 url = "https://github.com/aubepkg/aube/releases/download/v2.6.1/aube-v2.6.1-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/aubepkg/aube/.github/workflows/release.yml"
@@ -106,7 +121,17 @@ checksum = "sha256:a9197f2729bab1b4b20dc7cb8ae7af987d4ea13935fe1f1cd360691a63c5c
 url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.linux-amd64.txz"
 url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610481721"
 
+[tools."github:elide-dev/elide"."platforms.linux-x64-baseline"]
+checksum = "sha256:a9197f2729bab1b4b20dc7cb8ae7af987d4ea13935fe1f1cd360691a63c5cf8f"
+url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.linux-amd64.txz"
+url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610481721"
+
 [tools."github:elide-dev/elide"."platforms.linux-x64-musl"]
+checksum = "sha256:a9197f2729bab1b4b20dc7cb8ae7af987d4ea13935fe1f1cd360691a63c5cf8f"
+url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.linux-amd64.txz"
+url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610481721"
+
+[tools."github:elide-dev/elide"."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:a9197f2729bab1b4b20dc7cb8ae7af987d4ea13935fe1f1cd360691a63c5cf8f"
 url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.linux-amd64.txz"
 url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610481721"
@@ -117,6 +142,11 @@ url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.ma
 url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610482571"
 
 [tools."github:elide-dev/elide"."platforms.windows-x64"]
+checksum = "sha256:e27f647346799e73b2e8fe3ce90949d1c0fe9d6a3896ccbc2fb68b345f9b007a"
+url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.windows-amd64.zip"
+url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610483694"
+
+[tools."github:elide-dev/elide"."platforms.windows-x64-baseline"]
 checksum = "sha256:e27f647346799e73b2e8fe3ce90949d1c0fe9d6a3896ccbc2fb68b345f9b007a"
 url = "https://github.com/elide-dev/elide/releases/download/v1.6.0-rc.1/elide.windows-amd64.zip"
 url_api = "https://api.github.com/repos/elide-dev/elide/releases/assets/610483694"
@@ -184,6 +214,10 @@ url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162
 checksum = "sha256:555ce0821e4fe175ea50d54518cd6fbece9663c1998de529bc6ce429534457df"
 url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_linux-x64_bin.tar.gz"
 
+[tools.java."platforms.linux-x64-baseline"]
+checksum = "sha256:555ce0821e4fe175ea50d54518cd6fbece9663c1998de529bc6ce429534457df"
+url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_linux-x64_bin.tar.gz"
+
 [tools.java."platforms.macos-arm64"]
 checksum = "sha256:7581b0d1752cd5acbf39e286c03f07b6cd6c205b562eb2fe753ff0253cf4c1bf"
 url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_macos-aarch64_bin.tar.gz"
@@ -192,6 +226,14 @@ url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162
 checksum = "sha256:4ec2f4bc47b057fdf9cda07af27fae8f3605e90fa963d4240d63baeb46ede460"
 url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_macos-x64_bin.tar.gz"
 
+[tools.java."platforms.macos-x64-baseline"]
+checksum = "sha256:4ec2f4bc47b057fdf9cda07af27fae8f3605e90fa963d4240d63baeb46ede460"
+url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_macos-x64_bin.tar.gz"
+
 [tools.java."platforms.windows-x64"]
+checksum = "sha256:74784a0c07258f32d36e9224dd79187c566d831c30d47dc06888d4212087331d"
+url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_windows-x64_bin.zip"
+
+[tools.java."platforms.windows-x64-baseline"]
 checksum = "sha256:74784a0c07258f32d36e9224dd79187c566d831c30d47dc06888d4212087331d"
 url = "https://download.java.net/java/GA/jdk25.0.2/b1e0dfa218384cb9959bdcb897162d4e/10/GPL/openjdk-25.0.2_windows-x64_bin.zip"
