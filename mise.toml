@@ -1,6 +1,6 @@
 [tools]
 aube = "latest"
 bun = "latest"
-"github:elide-dev/elide" = "1.4.4+20260824"
+"github:elide-dev/elide" = "1.6.0-rc.1"
 hk = "latest"
 java = { version = "openjdk-25", install_env = { JAVA_TOOL_OPTIONS = "--enable-native-access=ALL-UNNAMED" } }
