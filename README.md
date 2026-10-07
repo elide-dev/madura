@@ -1,4 +1,4 @@
-# madura
+![Madura](./docs/banner.png)
 
 An experiment, called `madura`, which provides a hermetic, minimalist Java compiler from JDK internals only.
 
